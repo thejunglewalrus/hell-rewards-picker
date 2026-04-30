@@ -1,0 +1,1748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lost Ark — Hell Reward Picker</title>
+<style>
+:root {
+  --bg: #0a0a12; --surface: #12121f; --surface2: #1a1a2e; --border: #2a2a44;
+  --text: #e0e0f0; --text2: #8888aa; --text3: #5a5a7a; --accent: #7c5cfc;
+  --gold: #ffd700; --gold-dim:#a88d2c; --green:#22c55e; --red:#ef4444;
+  --wealth: #d946ef;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; line-height:1.45;}
+h1 { text-align:center; padding:22px 0 4px; font-size:1.7rem; letter-spacing:.5px;
+     background:linear-gradient(135deg,#ef4444,#d946ef); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.subtitle { text-align:center; color:var(--text2); margin-bottom:18px; font-size:.85rem; }
+.container { max-width:1280px; margin:0 auto; padding:0 18px 60px; }
+
+/* Layout */
+.layout { display:grid; grid-template-columns: 260px 1fr; gap:14px; align-items:flex-start;}
+.picker-grid { display:grid; grid-template-columns: 1fr 320px; gap:14px; align-items:flex-start;}
+.content-area > * { width:100%; }
+.setup-sidebar { position:sticky; top:14px; max-height:calc(100vh - 28px); overflow-y:auto; }
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: 1fr; }
+  .picker-grid { grid-template-columns: 1fr; }
+  .setup-sidebar { position:static; max-height:none; }
+}
+
+.panel { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px;}
+.panel h2 { font-size:.95rem; font-weight:600; color:var(--text); margin-bottom:10px; padding-bottom:8px;
+            border-bottom:1px solid var(--border); letter-spacing:.5px; text-transform:uppercase; }
+.panel h3 { font-size:.78rem; font-weight:600; color:var(--text2); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.4px;}
+
+/* Controls */
+.ctrl { display:flex; flex-direction:column; gap:6px; margin-bottom:12px;}
+.ctrl label { font-size:.7rem; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
+.ctrl select, .ctrl input[type=number] {
+  background:var(--surface2); color:var(--text); border:1px solid var(--border);
+  padding:6px 8px; border-radius:5px; font-size:.85rem; font-family:inherit;
+}
+.ctrl select:focus, .ctrl input:focus { outline:none; border-color:var(--accent); }
+
+.toggle { display:flex; align-items:center; gap:8px; padding:6px 0; cursor:pointer; user-select:none; font-size:.83rem;}
+.toggle input[type=checkbox] { width:16px; height:16px; accent-color:var(--accent); cursor:pointer;}
+
+/* Chest table */
+.chest-tbl { width:100%; border-collapse:collapse; font-size:.85rem;}
+.chest-tbl th { text-align:left; font-size:.7rem; text-transform:uppercase; color:var(--text2); padding:6px 8px; border-bottom:1px solid var(--border); font-weight:600; letter-spacing:.5px;}
+.chest-tbl th.num, .chest-tbl td.num { text-align:right; }
+.chest-tbl tbody tr { transition: background .12s; cursor:pointer; }
+.chest-tbl tbody tr:hover { background:var(--surface2); }
+.chest-tbl tbody tr.picked { background:rgba(124,92,252,.12); border-left:3px solid var(--accent); }
+.chest-tbl tbody tr.picked.wealth { background:rgba(217,70,239,.15); border-left-color:var(--wealth); }
+.chest-tbl tbody tr.top { color:var(--gold); }
+
+/* Re-sort animations: flash a row green when it moved up, red when it moved down */
+@keyframes chest-flash-up {
+  0%   { background: rgba(34,197,94,.32); box-shadow: inset 3px 0 0 var(--green); }
+  100% { background: transparent;          box-shadow: inset 3px 0 0 transparent; }
+}
+@keyframes chest-flash-down {
+  0%   { background: rgba(239,68,68,.22); box-shadow: inset 3px 0 0 var(--red); }
+  100% { background: transparent;          box-shadow: inset 3px 0 0 transparent; }
+}
+.chest-tbl tbody tr.moved-up   { animation: chest-flash-up   1.1s ease-out; }
+.chest-tbl tbody tr.moved-down { animation: chest-flash-down 1.1s ease-out; }
+.move-indicator { display:inline-block; margin-right:6px; font-weight:700; font-size:.85rem; vertical-align:baseline;
+                  animation: move-fade 1.1s ease-out forwards; }
+.move-indicator.up   { color:var(--green); }
+.move-indicator.down { color:var(--red); }
+@keyframes move-fade {
+  0%   { opacity: 1; transform: translateY(0); }
+  60%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-2px); }
+}
+.chest-tbl td { padding:7px 8px; border-bottom:1px solid var(--border);}
+.chest-tbl tr:last-child td { border-bottom:none; }
+
+.pick-btn { width:22px; height:22px; border-radius:4px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; font-size:.85rem; font-weight:700;}
+.pick-btn.on { background:var(--accent); color:white; border-color:var(--accent); }
+.wealth-btn { width:22px; height:22px; border-radius:4px; border:1px solid var(--border); background:var(--surface2); color:var(--text3); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; font-size:.7rem; font-weight:700;}
+.wealth-btn.on { background:var(--wealth); color:white; border-color:var(--wealth); }
+.wealth-btn:disabled { cursor:not-allowed; opacity:.4; }
+
+.gold-val { color:var(--gold); font-weight:600; }
+.gold-dim { color:var(--gold-dim); }
+
+/* Summary */
+.summary-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--border); font-size:.82rem;}
+.summary-row:last-child { border-bottom:none; }
+.summary-row .label { color:var(--text2); }
+.summary-row .val.wealth-on { color:var(--wealth); font-weight:600;}
+.summary-tot { display:flex; justify-content:space-between; padding:14px 0 4px; border-top:2px solid var(--accent); margin-top:8px; font-size:1.05rem; font-weight:700; }
+.summary-tot .val { color:var(--gold); }
+.empty-msg { color:var(--text3); font-size:.82rem; padding:16px 4px; font-style:italic; text-align:center;}
+
+/* Cube comparison */
+.cube-tbl { width:100%; border-collapse:collapse; font-size:.85rem; margin-top:8px;}
+.cube-tbl th, .cube-tbl td { padding:6px 8px; text-align:left; border-bottom:1px solid var(--border); }
+.cube-tbl th { font-size:.7rem; text-transform:uppercase; color:var(--text2); font-weight:600;}
+.cube-tbl th.num, .cube-tbl td.num { text-align:right;}
+.cube-tbl tr.best { background:rgba(34,197,94,.08); }
+.delta-pos { color:var(--green); }
+.delta-neg { color:var(--red); }
+
+/* Section */
+.section { margin-top:16px; }
+
+/* Override prices */
+.price-grid { display:grid; grid-template-columns: 1fr 80px; gap:6px; align-items:center; font-size:.8rem; }
+.price-grid .label { color:var(--text2); }
+.price-grid input { background:var(--surface2); color:var(--text); border:1px solid var(--border); padding:3px 6px; border-radius:4px; font-size:.8rem; text-align:right; width:100%; font-family:inherit;}
+.price-grid input.modified { border-color:var(--accent); color:var(--accent);}
+details summary { cursor:pointer; padding:4px 0; color:var(--text2); font-size:.78rem; text-transform:uppercase; letter-spacing:.5px;}
+details[open] summary { color:var(--text); }
+.reset-btn { background:transparent; color:var(--text3); border:none; cursor:pointer; font-size:.75rem; padding:4px 0; text-decoration:underline;}
+.reset-btn:hover { color:var(--accent); }
+
+.banner { background:rgba(217,70,239,.08); border:1px solid rgba(217,70,239,.3); border-radius:6px; padding:8px 10px; font-size:.78rem; color:var(--text2); margin-bottom:14px;}
+.banner b { color:var(--wealth); }
+
+.notes { font-size:.72rem; color:var(--text3); padding:8px 0; line-height:1.5;}
+.notes a { color:var(--accent); text-decoration:none;}
+.notes a:hover { text-decoration:underline;}
+
+.tag { display:inline-block; padding:1px 6px; border-radius:3px; font-size:.65rem; text-transform:uppercase; letter-spacing:.5px; margin-left:6px; vertical-align:middle;}
+.tag.old { background:rgba(168,141,44,.2); color:#a88d2c; }
+
+/* Tab nav */
+.tabs { display:flex; gap:4px; justify-content:center; margin:0 0 18px; border-bottom:1px solid var(--border); padding:0 10px;}
+.tab-btn { background:transparent; color:var(--text2); border:none; border-bottom:2px solid transparent;
+           padding:10px 16px; cursor:pointer; font-family:inherit; font-size:.85rem; font-weight:600;
+           letter-spacing:.4px; text-transform:uppercase; transition:color .12s, border-color .12s;}
+.tab-btn:hover { color:var(--text); }
+.tab-btn.on { color:var(--accent); border-bottom-color:var(--accent); }
+
+/* Multiplier toggles */
+.mult-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px;}
+.mult-btn { background:var(--surface2); color:var(--text2); border:1px solid var(--border);
+            padding:6px 14px; border-radius:5px; font-family:inherit; font-size:.85rem; font-weight:600;
+            cursor:pointer; transition:all .12s;}
+.mult-btn:hover { color:var(--text); border-color:var(--text3); }
+.mult-btn.on { background:var(--accent); color:white; border-color:var(--accent); }
+
+/* Rewards verification tables */
+.verify-tbl { width:100%; border-collapse:collapse; font-size:.85rem;}
+.verify-tbl th { text-align:left; font-size:.7rem; text-transform:uppercase; color:var(--text2); padding:8px; border-bottom:1px solid var(--border); font-weight:600; letter-spacing:.5px;}
+.verify-tbl th.num, .verify-tbl td.num { text-align:right; }
+.verify-tbl td { padding:8px; border-bottom:1px solid var(--border);}
+.verify-tbl tr:last-child td { border-bottom:none; }
+.verify-tbl tr.total td { background:rgba(255,215,0,.06); font-weight:600;}
+.verify-tbl .name-cell { font-weight:600; }
+.verify-tbl .sub { color:var(--text3); font-size:.7rem; font-weight:400;}
+
+/* Journey */
+.journey { display:flex; flex-direction:column; gap:0; margin:14px 0;}
+.j-stage { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:14px; display:flex; justify-content:space-between; align-items:center; gap:12px;}
+.j-stage .name { font-weight:700; font-size:.95rem;}
+.j-stage .name .sub { color:var(--text3); font-size:.7rem; font-weight:400; margin-top:3px; display:block; text-transform:none; letter-spacing:0;}
+.j-stage .qty-side { text-align:right; flex-shrink:0;}
+.j-stage .qty { font-size:1.3rem; font-weight:700; color:var(--gold);}
+.j-stage .qty.muted { color:var(--text2);}
+.j-stage .qty-sub { color:var(--text3); font-size:.72rem; margin-top:2px;}
+.j-step { display:flex; flex-direction:column; align-items:center; padding:6px 0; position:relative;}
+.j-step .arrow { color:var(--text3); font-size:1.2rem; line-height:1;}
+.j-step .delta { padding:4px 12px; border-radius:14px; font-size:.78rem; font-weight:700; margin-top:4px;}
+.j-step .delta.gain { background:rgba(34,197,94,.15); color:var(--green); border:1px solid rgba(34,197,94,.4);}
+.j-step .delta.loss { background:rgba(239,68,68,.15); color:var(--red); border:1px solid rgba(239,68,68,.4);}
+.j-step .conv-label { color:var(--text3); font-size:.72rem; margin-top:3px; font-style:italic;}
+.j-net { background:linear-gradient(135deg, rgba(34,197,94,.08), rgba(124,92,252,.08)); border:1px solid var(--accent); border-radius:8px; padding:12px 14px; margin-top:12px; display:flex; justify-content:space-between; align-items:center;}
+.j-net .label { font-weight:600; font-size:.85rem;}
+.j-net .val { font-weight:700; font-size:1.1rem;}
+
+/* Mat list under each stage */
+.mat-block { margin-top:10px; padding-top:10px; border-top:1px dashed var(--border);}
+.mat-block .mat-title { font-size:.7rem; color:var(--text2); text-transform:uppercase; letter-spacing:.4px; margin-bottom:6px; font-weight:600;}
+.mat-list { display:flex; flex-wrap:wrap; gap:6px;}
+.mat-pill { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:.78rem; color:var(--text); white-space:nowrap; display:flex; flex-direction:column; align-items:flex-start; gap:1px;}
+.mat-pill .top { display:flex; align-items:baseline; gap:4px;}
+.mat-pill .qty { font-weight:700; color:var(--gold);}
+.mat-pill .name { color:var(--text2);}
+.mat-pill .gold { color:var(--gold-dim); font-size:.7rem; font-weight:500;}
+.mat-pill.alt { background:rgba(124,92,252,.06); border-color:rgba(124,92,252,.3);}
+.mat-pill.alt .name { color:var(--accent);}
+.mat-pill.zero .gold { color:var(--text3);}
+.mat-pill.empty { color:var(--text3); font-style:italic; background:transparent; border-style:dashed; font-size:.78rem; flex-direction:row;}
+</style>
+</head>
+<body>
+
+<div id="creator-badge" style="position:fixed; top:14px; right:18px; z-index:100; display:flex; align-items:center; gap:10px; background:rgba(18,18,31,.85); backdrop-filter:blur(6px); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:.85rem;">
+  <span style="font-weight:700; background:linear-gradient(135deg,#ef4444,#d946ef); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">@thejunglewalrus</span>
+  <a href="https://www.youtube.com/@thejunglewalrus" target="_blank" rel="noopener" title="YouTube" style="color:#ff5050; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+    <svg width="18" height="13" viewBox="0 0 24 17" fill="currentColor"><path d="M23.5 2.6c-.3-1-1-1.8-2-2.1C19.7 0 12 0 12 0S4.3 0 2.5.5c-1 .3-1.7 1.1-2 2.1C0 4.4 0 8.5 0 8.5s0 4.1.5 5.9c.3 1 1 1.8 2 2.1C4.3 17 12 17 12 17s7.7 0 9.5-.5c1-.3 1.7-1.1 2-2.1.5-1.8.5-5.9.5-5.9s0-4.1-.5-5.9zM9.6 12.1V4.9l6.4 3.6-6.4 3.6z"/></svg>
+    YouTube
+  </a>
+  <a href="https://www.twitch.tv/thejunglewalrus" target="_blank" rel="noopener" title="Twitch" style="color:#9146ff; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+    <svg width="14" height="16" viewBox="0 0 16 18" fill="currentColor"><path d="M1.4 0L.4 2.7v11h3.7v2.3H6l2.3-2.3h3l4-4V0H1.4zm13.3 9l-2.3 2.3H10L7.7 13.7v-2.3H4.4V1.4h10.3V9zm-3 .7V4h-1.3v5.7h1.3zm-3.7 0V4H6.7v5.7H8z"/></svg>
+    Twitch
+  </a>
+</div>
+
+<h1>Lost Ark — Hell Reward Picker</h1>
+<p class="subtitle">Compare gold value of every chest at every floor. Toggle <b style="color:var(--wealth)">Wealth +1</b> on chests to apply the 10× multiplier.</p>
+
+<div class="container">
+  <div id="root"></div>
+  <div style="text-align:center; padding:24px 0 8px; color:var(--text3); font-size:.75rem;">
+    Thanks to Arkemys for the reward spreadsheet and <a href="https://sekwahar.github.io/" target="_blank" style="color:var(--accent); text-decoration:none;">Sekwahar</a> for the data-mined drop tables.
+  </div>
+</div>
+
+<script>const __DATA__ = {"source_url":"https://docs.google.com/spreadsheets/d/1MicXg7ve7G6sXKwMezKXYJYPsf-dULJnJ5l3htASjSA/edit","extracted_at":"2026-04-28T22:43:39Z","key_tiers":[{"columns":["Stones","Juice","Fusions","Leapstones","Gold","Free taps","Ability stones","Bracelets","Accessories","Karma","Random Astrogems","Selectable Astrogems","Elysian ticket","Base shards","Base red stones","Base blue stones","Base leapstones","_","Av. gold value (Destiny)"],"floors":[{"range":"0 - 9","rewards":{"Stones":500.0,"Juice":10.0,"Fusions":60.0,"Leapstones":25.0,"Gold":4500.0,"Free taps":24.0,"Ability stones":8.0,"Bracelets":8.0,"Accessories":4.0,"Karma":7.0,"Random Astrogems":"3|0|0","Selectable Astrogems":"3|0|0","Base shards":6.0,"Base red stones":25.0,"Base blue stones":150.0,"Base leapstones":4.0}},{"range":"10 - 19","rewards":{"Stones":600.0,"Juice":15.0,"Fusions":90.0,"Leapstones":36.0,"Gold":7200.0,"Free taps":40.0,"Ability stones":10.0,"Bracelets":10.0,"Accessories":6.0,"Karma":12.0,"Random Astrogems":"4|0|0","Selectable Astrogems":"5|0|0","Base shards":7.0,"Base red stones":30.0,"Base blue stones":200.0,"Base leapstones":5.0}},{"range":"20 - 29","rewards":{"Stones":900.0,"Juice":20.0,"Fusions":125.0,"Leapstones":48.0,"Gold":9500.0,"Free taps":56.0,"Ability stones":15.0,"Bracelets":13.0,"Accessories":8.0,"Karma":15.0,"Random Astrogems":"6|0|0","Selectable Astrogems":"0|1|0","Base shards":8.0,"Base red stones":38.0,"Base blue stones":240.0,"Base leapstones":6.0}},{"range":"30 - 39","rewards":{"Stones":1200.0,"Juice":25.0,"Fusions":150.0,"Leapstones":64.0,"Gold":12000.0,"Free taps":70.0,"Ability stones":20.0,"Bracelets":16.0,"Accessories":12.0,"Karma":18.0,"Random Astrogems":"8|0|0","Selectable Astrogems":"1|1|0","Base shards":9.0,"Base red stones":44.0,"Base blue stones":280.0,"Base leapstones":7.0}},{"range":"40 - 49","rewards":{"Stones":1600.0,"Juice":36.0,"Fusions":225.0,"Leapstones":90.0,"Gold":16000.0,"Free taps":96.0,"Ability stones":25.0,"Bracelets":24.0,"Accessories":16.0,"Karma":27.0,"Random Astrogems":"10|0|0","Selectable Astrogems":"1|1|0","Base shards":10.0,"Base red stones":52.0,"Base blue stones":330.0,"Base leapstones":8.0}},{"range":"50 - 59","rewards":{"Stones":2200.0,"Juice":48.0,"Fusions":300.0,"Leapstones":130.0,"Gold":22000.0,"Free taps":130.0,"Ability stones":30.0,"Bracelets":32.0,"Accessories":22.0,"Karma":36.0,"Random Astrogems":"0|3|0","Selectable Astrogems":"0|2|0","Elysian ticket":2.0,"Base shards":11.5,"Base red stones":60.0,"Base blue stones":380.0,"Base leapstones":9.0}},{"range":"60 - 69","rewards":{"Stones":3000.0,"Juice":72.0,"Fusions":450.0,"Leapstones":190.0,"Gold":32000.0,"Free taps":180.0,"Ability stones":45.0,"Bracelets":42.0,"Accessories":30.0,"Karma":54.0,"Random Astrogems":"0|4|0","Selectable Astrogems":"0|3|0","Elysian ticket":4.0,"Base shards":13.0,"Base red stones":70.0,"Base blue stones":440.0,"Base leapstones":10.0}},{"range":"70 - 79","rewards":{"Stones":4500.0,"Juice":96.0,"Fusions":600.0,"Leapstones":250.0,"Gold":45000.0,"Free taps":260.0,"Ability stones":60.0,"Bracelets":60.0,"Accessories":40.0,"Karma":72.0,"Random Astrogems":"0|6|0","Selectable Astrogems":"0|0|1","Elysian ticket":7.0,"Base shards":14.0,"Base red stones":80.0,"Base blue stones":500.0,"Base leapstones":11.0}},{"range":"80 - 89","rewards":{"Stones":6500.0,"Juice":132.0,"Fusions":850.0,"Leapstones":350.0,"Gold":65000.0,"Free taps":360.0,"Ability stones":80.0,"Bracelets":80.0,"Accessories":60.0,"Karma":100.0,"Random Astrogems":"0|8|0","Selectable Astrogems":"0|1|1","Elysian ticket":10.0,"Base shards":15.5,"Base red stones":90.0,"Base blue stones":560.0,"Base leapstones":12.0}},{"range":"90 - 99","rewards":{"Stones":9000.0,"Juice":192.0,"Fusions":1200.0,"Leapstones":500.0,"Gold":95000.0,"Free taps":500.0,"Ability stones":120.0,"Bracelets":120.0,"Accessories":80.0,"Karma":150.0,"Random Astrogems":"0|10|0","Selectable Astrogems":"0|0|2","Elysian ticket":15.0,"Base shards":17.0,"Base red stones":100.0,"Base blue stones":620.0,"Base leapstones":13.0}},{"range":"100","rewards":{"Stones":15000.0,"Juice":320.0,"Fusions":2000.0,"Leapstones":850.0,"Gold":130000.0,"Free taps":850.0,"Ability stones":200.0,"Bracelets":200.0,"Accessories":120.0,"Karma":240.0,"Random Astrogems":"0|15|0","Selectable Astrogems":"0|0|3","Elysian ticket":20.0,"Base shards":18.0,"Base red stones":110.0,"Base blue stones":680.0,"Base leapstones":15.0}}],"unit_gold_value":{"Stones":26.5,"Juice":1000,"Fusions":241,"Leapstones":107,"Gold":1,"Free taps":1000,"Ability stones":0,"Bracelets":10,"Accessories":0,"Karma":600,"Random Astrogems":0,"Selectable Astrogems":0,"Elysian ticket":0,"Base shards":0,"Base red stones":26.5,"Base blue stones":1.15,"Base leapstones":107},"gold_value_per_floor":[{"range":"0 - 9","breakdown":{"Stones":13250,"Juice":10000,"Fusions":14460,"Leapstones":2675,"Gold":4500,"Free taps":24000,"Ability stones":0,"Bracelets":80,"Accessories":0,"Karma":4200,"Random Astrogems":840,"Selectable Astrogems":0,"Base shards":0,"Base red stones":662.5,"Base blue stones":172.5,"Base leapstones":428,"Av. gold value (Destiny)":14965.18636},"total":14965.18636},{"range":"10 - 19","breakdown":{"Stones":15900,"Juice":15000,"Fusions":21690,"Leapstones":3852,"Gold":7200,"Free taps":40000,"Ability stones":0,"Bracelets":100,"Accessories":0,"Karma":7200,"Random Astrogems":1120,"Selectable Astrogems":0,"Base shards":0,"Base red stones":795,"Base blue stones":230,"Base leapstones":535,"Av. gold value (Destiny)":22438.68182},"total":22438.68182},{"range":"20 - 29","breakdown":{"Stones":23850,"Juice":20000,"Fusions":30125,"Leapstones":5136,"Gold":9500,"Free taps":56000,"Ability stones":0,"Bracelets":130,"Accessories":0,"Karma":9000,"Random Astrogems":1680,"Selectable Astrogems":500,"Base shards":0,"Base red stones":1007,"Base blue stones":276,"Base leapstones":642,"Av. gold value (Destiny)":31016},"total":31016},{"range":"30 - 39","breakdown":{"Stones":31800,"Juice":25000,"Fusions":36150,"Leapstones":6848,"Gold":12000,"Free taps":70000,"Ability stones":0,"Bracelets":160,"Accessories":0,"Karma":10800,"Random Astrogems":2240,"Selectable Astrogems":500,"Base shards":0,"Base red stones":1166,"Base blue stones":322,"Base leapstones":749,"Av. gold value (Destiny)":38561.45},"total":38561.45},{"range":"40 - 49","breakdown":{"Stones":42400,"Juice":36000,"Fusions":54225,"Leapstones":9630,"Gold":16000,"Free taps":96000,"Ability stones":0,"Bracelets":240,"Accessories":0,"Karma":16200,"Random Astrogems":2800,"Selectable Astrogems":500,"Base shards":0,"Base red stones":1378,"Base blue stones":379.5,"Base leapstones":856,"Av. gold value (Destiny)":53298.975},"total":53298.975},{"range":"50 - 59","breakdown":{"Stones":58300,"Juice":48000,"Fusions":72300,"Leapstones":13910,"Gold":22000,"Free taps":130000,"Ability stones":0,"Bracelets":320,"Accessories":0,"Karma":21600,"Random Astrogems":4200,"Selectable Astrogems":1000,"Elysian ticket":0,"Base shards":0,"Base red stones":1590,"Base blue stones":437,"Base leapstones":963,"Av. gold value (Destiny)":67795.97552},"total":67795.97552},{"range":"60 - 69","breakdown":{"Stones":79500,"Juice":72000,"Fusions":108450,"Leapstones":20330,"Gold":32000,"Free taps":180000,"Ability stones":0,"Bracelets":420,"Accessories":0,"Karma":32400,"Random Astrogems":5600,"Selectable Astrogems":1500,"Elysian ticket":0,"Base shards":0,"Base red stones":1855,"Base blue stones":506,"Base leapstones":1070,"Av. gold value (Destiny)":95417.37448},"total":95417.37448},{"range":"70 - 79","breakdown":{"Stones":119250,"Juice":96000,"Fusions":144600,"Leapstones":26750,"Gold":45000,"Free taps":260000,"Ability stones":0,"Bracelets":600,"Accessories":0,"Karma":43200,"Random Astrogems":8400,"Selectable Astrogems":5000,"Elysian ticket":0,"Base shards":0,"Base red stones":2120,"Base blue stones":575,"Base leapstones":1177,"Av. gold value (Destiny)":133267.4098},"total":133267.4098},{"range":"80 - 89","breakdown":{"Stones":172250,"Juice":132000,"Fusions":204850,"Leapstones":37450,"Gold":65000,"Free taps":360000,"Ability stones":0,"Bracelets":800,"Accessories":0,"Karma":60000,"Random Astrogems":11200,"Selectable Astrogems":5500,"Elysian ticket":0,"Base shards":0,"Base red stones":2385,"Base blue stones":644,"Base leapstones":1284,"Av. gold value (Destiny)":185260.1374},"total":185260.1374},{"range":"90 - 99","breakdown":{"Stones":238500,"Juice":192000,"Fusions":289200,"Leapstones":53500,"Gold":95000,"Free taps":500000,"Ability stones":0,"Bracelets":1200,"Accessories":0,"Karma":90000,"Random Astrogems":14000,"Selectable Astrogems":10000,"Elysian ticket":0,"Base shards":0,"Base red stones":2650,"Base blue stones":713,"Base leapstones":1391,"Av. gold value (Destiny)":258538.879},"total":258538.879},{"range":"100","breakdown":{"Stones":397500,"Juice":320000,"Fusions":482000,"Leapstones":90950,"Gold":130000,"Free taps":850000,"Ability stones":0,"Bracelets":2000,"Accessories":0,"Karma":144000,"Random Astrogems":21000,"Selectable Astrogems":15000,"Elysian ticket":0,"Base shards":0,"Base red stones":2915,"Base blue stones":782,"Base leapstones":1605,"Av. gold value (Destiny)":428310.672},"total":428310.672}],"ilvl":1730,"mode":"Destiny","label":"1730 Destiny Rewards","is_old":false},{"columns":["Stones","Juice","Fusions","Shards","Gold","Free taps","Ability stones","Bracelets","Accessories","Karma","Random Astrogems","Selectable Astrogems","Elysian ticket","Base shards","Base red stones","Base blue stones","Base leapstones","_","Av. gold value (Destiny)"],"floors":[{"range":"0 - 9","rewards":{"Stones":2400.0,"Juice":10.0,"Fusions":110.0,"Shards":13.0,"Gold":4500.0,"Free taps":100.0,"Ability stones":8.0,"Bracelets":8.0,"Accessories":4.0,"Karma":7.0,"Random Astrogems":"3|0|0","Selectable Astrogems":"3|0|0","Base shards":1.8,"Base red stones":40.0,"Base blue stones":250.0,"Base leapstones":5.0}},{"range":"10 - 19","rewards":{"Stones":3600.0,"Juice":15.0,"Fusions":150.0,"Shards":20.0,"Gold":7200.0,"Free taps":150.0,"Ability stones":10.0,"Bracelets":10.0,"Accessories":6.0,"Karma":12.0,"Random Astrogems":"4|0|0","Selectable Astrogems":"5|0|0","Base shards":2.2,"Base red stones":48.0,"Base blue stones":320.0,"Base leapstones":6.0}},{"range":"20 - 29","rewards":{"Stones":4800.0,"Juice":20.0,"Fusions":200.0,"Shards":27.0,"Gold":9500.0,"Free taps":200.0,"Ability stones":15.0,"Bracelets":13.0,"Accessories":8.0,"Karma":15.0,"Random Astrogems":"6|0|0","Selectable Astrogems":"0|1|0","Base shards":2.6,"Base red stones":58.0,"Base blue stones":380.0,"Base leapstones":7.0}},{"range":"30 - 39","rewards":{"Stones":6000.0,"Juice":25.0,"Fusions":250.0,"Shards":33.0,"Gold":12000.0,"Free taps":260.0,"Ability stones":20.0,"Bracelets":16.0,"Accessories":12.0,"Karma":18.0,"Random Astrogems":"8|0|0","Selectable Astrogems":"1|1|0","Base shards":3.0,"Base red stones":68.0,"Base blue stones":450.0,"Base leapstones":8.0}},{"range":"40 - 49","rewards":{"Stones":9000.0,"Juice":36.0,"Fusions":350.0,"Shards":50.0,"Gold":16000.0,"Free taps":380.0,"Ability stones":25.0,"Bracelets":24.0,"Accessories":16.0,"Karma":27.0,"Random Astrogems":"10|0|0","Selectable Astrogems":"1|1|0","Base shards":3.5,"Base red stones":76.0,"Base blue stones":520.0,"Base leapstones":9.0}},{"range":"50 - 59","rewards":{"Stones":12000.0,"Juice":48.0,"Fusions":500.0,"Shards":65.0,"Gold":22000.0,"Free taps":520.0,"Ability stones":30.0,"Bracelets":32.0,"Accessories":22.0,"Karma":36.0,"Random Astrogems":"0|3|0","Selectable Astrogems":"0|2|0","Elysian ticket":2.0,"Base shards":4.0,"Base red stones":86.0,"Base blue stones":580.0,"Base leapstones":10.0}},{"range":"60 - 69","rewards":{"Stones":18000.0,"Juice":72.0,"Fusions":700.0,"Shards":98.0,"Gold":32000.0,"Free taps":750.0,"Ability stones":45.0,"Bracelets":42.0,"Accessories":30.0,"Karma":54.0,"Random Astrogems":"0|4|0","Selectable Astrogems":"0|3|0","Elysian ticket":4.0,"Base shards":4.4,"Base red stones":95.0,"Base blue stones":640.0,"Base leapstones":11.0}},{"range":"70 - 79","rewards":{"Stones":24000.0,"Juice":96.0,"Fusions":950.0,"Shards":130.0,"Gold":45000.0,"Free taps":1000.0,"Ability stones":60.0,"Bracelets":60.0,"Accessories":40.0,"Karma":72.0,"Random Astrogems":"0|6|0","Selectable Astrogems":"0|0|1","Elysian ticket":7.0,"Base shards":4.8,"Base red stones":105.0,"Base blue stones":700.0,"Base leapstones":12.0}},{"range":"80 - 89","rewards":{"Stones":32000.0,"Juice":132.0,"Fusions":1300.0,"Shards":180.0,"Gold":65000.0,"Free taps":1400.0,"Ability stones":80.0,"Bracelets":80.0,"Accessories":60.0,"Karma":100.0,"Random Astrogems":"0|8|0","Selectable Astrogems":"0|1|1","Elysian ticket":10.0,"Base shards":5.2,"Base red stones":115.0,"Base blue stones":760.0,"Base leapstones":13.0}},{"range":"90 - 99","rewards":{"Stones":48000.0,"Juice":192.0,"Fusions":1800.0,"Shards":260.0,"Gold":95000.0,"Free taps":2000.0,"Ability stones":120.0,"Bracelets":120.0,"Accessories":80.0,"Karma":150.0,"Random Astrogems":"0|10|0","Selectable Astrogems":"0|0|2","Elysian ticket":15.0,"Base shards":5.6,"Base red stones":120.0,"Base blue stones":840.0,"Base leapstones":14.0}},{"range":"100","rewards":{"Stones":80000.0,"Juice":320.0,"Fusions":3000.0,"Shards":450.0,"Gold":130000.0,"Free taps":3200.0,"Ability stones":200.0,"Bracelets":200.0,"Accessories":120.0,"Karma":240.0,"Random Astrogems":"0|15|0","Selectable Astrogems":"0|0|3","Elysian ticket":20.0,"Base shards":6.0,"Base red stones":140.0,"Base blue stones":900.0,"Base leapstones":15.0}}],"unit_gold_value":{"Stones":5,"Juice":1000,"Fusions":160,"Shards":0,"Gold":1,"Free taps":100,"Ability stones":0,"Bracelets":10,"Accessories":0,"Karma":600,"Random Astrogems":0,"Selectable Astrogems":0,"Elysian ticket":0,"Base shards":0,"Base red stones":5,"Base blue stones":0.1,"Base leapstones":13},"gold_value_per_floor":[{"range":"0 - 9","breakdown":{"Stones":12000,"Juice":10000,"Fusions":17600,"Shards":0,"Gold":4500,"Free taps":10000,"Ability stones":0,"Bracelets":80,"Accessories":0,"Karma":4200,"Random Astrogems":840,"Selectable Astrogems":0,"Base shards":0,"Base red stones":200,"Base blue stones":25,"Base leapstones":65,"Av. gold value (Destiny)":10911.40909},"total":10911.40909},{"range":"10 - 19","breakdown":{"Stones":18000,"Juice":15000,"Fusions":24000,"Shards":0,"Gold":7200,"Free taps":15000,"Ability stones":0,"Bracelets":100,"Accessories":0,"Karma":7200,"Random Astrogems":1120,"Selectable Astrogems":0,"Base shards":0,"Base red stones":240,"Base blue stones":32,"Base leapstones":78,"Av. gold value (Destiny)":15749.77273},"total":15749.77273},{"range":"20 - 29","breakdown":{"Stones":24000,"Juice":20000,"Fusions":32000,"Shards":0,"Gold":9500,"Free taps":20000,"Ability stones":0,"Bracelets":130,"Accessories":0,"Karma":9000,"Random Astrogems":1680,"Selectable Astrogems":500,"Base shards":0,"Base red stones":290,"Base blue stones":38,"Base leapstones":91,"Av. gold value (Destiny)":20905.15},"total":20905.15},{"range":"30 - 39","breakdown":{"Stones":30000,"Juice":25000,"Fusions":40000,"Shards":0,"Gold":12000,"Free taps":26000,"Ability stones":0,"Bracelets":160,"Accessories":0,"Karma":10800,"Random Astrogems":2240,"Selectable Astrogems":500,"Base shards":0,"Base red stones":340,"Base blue stones":45,"Base leapstones":104,"Av. gold value (Destiny)":26232.33182},"total":26232.33182},{"range":"40 - 49","breakdown":{"Stones":45000,"Juice":36000,"Fusions":56000,"Shards":0,"Gold":16000,"Free taps":38000,"Ability stones":0,"Bracelets":240,"Accessories":0,"Karma":16200,"Random Astrogems":2800,"Selectable Astrogems":500,"Base shards":0,"Base red stones":380,"Base blue stones":52,"Base leapstones":117,"Av. gold value (Destiny)":37527.15},"total":37527.15},{"range":"50 - 59","breakdown":{"Stones":60000,"Juice":48000,"Fusions":80000,"Shards":0,"Gold":22000,"Free taps":52000,"Ability stones":0,"Bracelets":320,"Accessories":0,"Karma":21600,"Random Astrogems":4200,"Selectable Astrogems":1000,"Elysian ticket":0,"Base shards":0,"Base red stones":430,"Base blue stones":58,"Base leapstones":130,"Av. gold value (Destiny)":49059.89441},"total":49059.89441},{"range":"60 - 69","breakdown":{"Stones":90000,"Juice":72000,"Fusions":112000,"Shards":0,"Gold":32000,"Free taps":75000,"Ability stones":0,"Bracelets":420,"Accessories":0,"Karma":32400,"Random Astrogems":5600,"Selectable Astrogems":1500,"Elysian ticket":0,"Base shards":0,"Base red stones":475,"Base blue stones":64,"Base leapstones":143,"Av. gold value (Destiny)":70814.82587},"total":70814.82587},{"range":"70 - 79","breakdown":{"Stones":120000,"Juice":96000,"Fusions":152000,"Shards":0,"Gold":45000,"Free taps":100000,"Ability stones":0,"Bracelets":600,"Accessories":0,"Karma":43200,"Random Astrogems":8400,"Selectable Astrogems":5000,"Elysian ticket":0,"Base shards":0,"Base red stones":525,"Base blue stones":70,"Base leapstones":156,"Av. gold value (Destiny)":95191.47238},"total":95191.47238},{"range":"80 - 89","breakdown":{"Stones":160000,"Juice":132000,"Fusions":208000,"Shards":0,"Gold":65000,"Free taps":140000,"Ability stones":0,"Bracelets":800,"Accessories":0,"Karma":60000,"Random Astrogems":11200,"Selectable Astrogems":5500,"Elysian ticket":0,"Base shards":0,"Base red stones":575,"Base blue stones":76,"Base leapstones":169,"Av. gold value (Destiny)":130085.3217},"total":130085.3217},{"range":"90 - 99","breakdown":{"Stones":240000,"Juice":192000,"Fusions":288000,"Shards":0,"Gold":95000,"Free taps":200000,"Ability stones":0,"Bracelets":1200,"Accessories":0,"Karma":90000,"Random Astrogems":14000,"Selectable Astrogems":10000,"Elysian ticket":0,"Base shards":0,"Base red stones":600,"Base blue stones":84,"Base leapstones":182,"Av. gold value (Destiny)":186439.0301},"total":186439.0301},{"range":"100","breakdown":{"Stones":400000,"Juice":320000,"Fusions":480000,"Shards":0,"Gold":130000,"Free taps":320000,"Ability stones":0,"Bracelets":2000,"Accessories":0,"Karma":144000,"Random Astrogems":21000,"Selectable Astrogems":15000,"Elysian ticket":0,"Base shards":0,"Base red stones":700,"Base blue stones":90,"Base leapstones":195,"Av. gold value (Destiny)":304962.6171},"total":304962.6171}],"ilvl":1730,"mode":"Destiny","label":"Old 1730 Destiny Rewards","is_old":true},{"columns":["Stones","Juice","Fusions","Shards","Gold","Free taps","Quality","Ability stones","Bracelets","Accessories","Karma","Random Astrogems","Elysian ticket","Base shards","Base red stones","Base blue stones","Base leapstones","_","Av. gold value (Destiny)"],"floors":[{"range":"0 - 9","rewards":{"Stones":2000.0,"Juice":9.0,"Fusions":100.0,"Shards":12.5,"Gold":4000.0,"Free taps":90.0,"Quality":7.0,"Ability stones":6.0,"Bracelets":7.0,"Accessories":3.0,"Karma":6.0,"Random Astrogems":"2|0|0","Base shards":1.8,"Base red stones":40.0,"Base blue stones":250.0,"Base leapstones":5.0}},{"range":"10 - 19","rewards":{"Stones":3000.0,"Juice":13.0,"Fusions":130.0,"Shards":18.0,"Gold":6000.0,"Free taps":140.0,"Quality":12.0,"Ability stones":8.0,"Bracelets":9.0,"Accessories":5.0,"Karma":9.0,"Random Astrogems":"3|0|0","Base shards":2.2,"Base red stones":48.0,"Base blue stones":320.0,"Base leapstones":6.0}},{"range":"20 - 29","rewards":{"Stones":4000.0,"Juice":18.0,"Fusions":170.0,"Shards":24.0,"Gold":8000.0,"Free taps":190.0,"Quality":15.0,"Ability stones":10.0,"Bracelets":12.0,"Accessories":7.0,"Karma":12.0,"Random Astrogems":"4|0|0","Base shards":2.6,"Base red stones":58.0,"Base blue stones":380.0,"Base leapstones":7.0}},{"range":"30 - 39","rewards":{"Stones":5000.0,"Juice":23.0,"Fusions":220.0,"Shards":30.0,"Gold":10000.0,"Free taps":240.0,"Quality":18.0,"Ability stones":12.0,"Bracelets":15.0,"Accessories":10.0,"Karma":15.0,"Random Astrogems":"6|0|0","Base shards":3.0,"Base red stones":68.0,"Base blue stones":450.0,"Base leapstones":8.0}},{"range":"40 - 49","rewards":{"Stones":7500.0,"Juice":33.0,"Fusions":330.0,"Shards":46.0,"Gold":14000.0,"Free taps":360.0,"Quality":27.0,"Ability stones":18.0,"Bracelets":22.0,"Accessories":15.0,"Karma":20.0,"Random Astrogems":"8|0|0","Base shards":3.5,"Base red stones":76.0,"Base blue stones":520.0,"Base leapstones":9.0}},{"range":"50 - 59","rewards":{"Stones":11000.0,"Juice":45.0,"Fusions":450.0,"Shards":60.0,"Gold":20000.0,"Free taps":500.0,"Quality":36.0,"Ability stones":24.0,"Bracelets":30.0,"Accessories":20.0,"Karma":30.0,"Random Astrogems":"0|2|0","Elysian ticket":2.0,"Base shards":4.0,"Base red stones":86.0,"Base blue stones":580.0,"Base leapstones":10.0}},{"range":"60 - 69","rewards":{"Stones":15000.0,"Juice":65.0,"Fusions":660.0,"Shards":90.0,"Gold":30000.0,"Free taps":700.0,"Quality":54.0,"Ability stones":36.0,"Bracelets":40.0,"Accessories":27.0,"Karma":45.0,"Random Astrogems":"0|3|0","Elysian ticket":4.0,"Base shards":4.4,"Base red stones":95.0,"Base blue stones":640.0,"Base leapstones":11.0}},{"range":"70 - 79","rewards":{"Stones":20000.0,"Juice":85.0,"Fusions":880.0,"Shards":125.0,"Gold":42000.0,"Free taps":900.0,"Quality":72.0,"Ability stones":48.0,"Bracelets":55.0,"Accessories":35.0,"Karma":60.0,"Random Astrogems":"0|4|0","Elysian ticket":7.0,"Base shards":4.8,"Base red stones":105.0,"Base blue stones":700.0,"Base leapstones":12.0}},{"range":"80 - 89","rewards":{"Stones":28000.0,"Juice":120.0,"Fusions":1200.0,"Shards":170.0,"Gold":60000.0,"Free taps":1300.0,"Quality":100.0,"Ability stones":60.0,"Bracelets":75.0,"Accessories":55.0,"Karma":80.0,"Random Astrogems":"0|6|0","Elysian ticket":10.0,"Base shards":5.2,"Base red stones":115.0,"Base blue stones":760.0,"Base leapstones":13.0}},{"range":"90 - 99","rewards":{"Stones":40000.0,"Juice":170.0,"Fusions":1700.0,"Shards":240.0,"Gold":80000.0,"Free taps":1800.0,"Quality":150.0,"Ability stones":90.0,"Bracelets":110.0,"Accessories":70.0,"Karma":120.0,"Random Astrogems":"0|8|0","Elysian ticket":15.0,"Base shards":5.6,"Base red stones":120.0,"Base blue stones":840.0,"Base leapstones":14.0}},{"range":"100","rewards":{"Stones":65000.0,"Juice":280.0,"Fusions":2800.0,"Shards":420.0,"Gold":115000.0,"Free taps":3000.0,"Quality":240.0,"Ability stones":150.0,"Bracelets":180.0,"Accessories":110.0,"Karma":200.0,"Random Astrogems":"0|10|0","Elysian ticket":20.0,"Base shards":6.0,"Base red stones":140.0,"Base blue stones":900.0,"Base leapstones":15.0}}],"unit_gold_value":{"Stones":5,"Juice":1000,"Fusions":160,"Shards":0,"Gold":1,"Free taps":100,"Quality":50,"Ability stones":0,"Bracelets":10,"Accessories":0,"Karma":600,"Random Astrogems":0,"Elysian ticket":0,"Base shards":0,"Base red stones":5,"Base blue stones":0.1,"Base leapstones":13},"gold_value_per_floor":[{"range":"0 - 9","breakdown":{"Stones":10000,"Juice":9000,"Fusions":16000,"Shards":0,"Gold":4000,"Free taps":9000,"Quality":350,"Ability stones":0,"Bracelets":70,"Accessories":0,"Karma":3600,"Random Astrogems":560,"Base shards":0,"Base red stones":200,"Base blue stones":25,"Base leapstones":65,"Av. gold value (Destiny)":9718.363636},"total":9718.363636},{"range":"10 - 19","breakdown":{"Stones":15000,"Juice":13000,"Fusions":20800,"Shards":0,"Gold":6000,"Free taps":14000,"Quality":600,"Ability stones":0,"Bracelets":90,"Accessories":0,"Karma":5400,"Random Astrogems":840,"Base shards":0,"Base red stones":240,"Base blue stones":32,"Base leapstones":78,"Av. gold value (Destiny)":13682.81818},"total":13682.81818},{"range":"20 - 29","breakdown":{"Stones":20000,"Juice":18000,"Fusions":27200,"Shards":0,"Gold":8000,"Free taps":19000,"Quality":750,"Ability stones":0,"Bracelets":120,"Accessories":0,"Karma":7200,"Random Astrogems":1120,"Base shards":0,"Base red stones":290,"Base blue stones":38,"Base leapstones":91,"Av. gold value (Destiny)":18184.10455},"total":18184.10455},{"range":"30 - 39","breakdown":{"Stones":25000,"Juice":23000,"Fusions":35200,"Shards":0,"Gold":10000,"Free taps":24000,"Quality":900,"Ability stones":0,"Bracelets":150,"Accessories":0,"Karma":9000,"Random Astrogems":1680,"Base shards":0,"Base red stones":340,"Base blue stones":45,"Base leapstones":104,"Av. gold value (Destiny)":23099.46818},"total":23099.46818},{"range":"40 - 49","breakdown":{"Stones":37500,"Juice":33000,"Fusions":52800,"Shards":0,"Gold":14000,"Free taps":36000,"Quality":1350,"Ability stones":0,"Bracelets":220,"Accessories":0,"Karma":12000,"Random Astrogems":2240,"Base shards":0,"Base red stones":380,"Base blue stones":52,"Base leapstones":117,"Av. gold value (Destiny)":33998.69545},"total":33998.69545},{"range":"50 - 59","breakdown":{"Stones":55000,"Juice":45000,"Fusions":72000,"Shards":0,"Gold":20000,"Free taps":50000,"Quality":1800,"Ability stones":0,"Bracelets":300,"Accessories":0,"Karma":18000,"Random Astrogems":2800,"Elysian ticket":0,"Base shards":0,"Base red stones":430,"Base blue stones":58,"Base leapstones":130,"Av. gold value (Destiny)":45053.88042},"total":45053.88042},{"range":"60 - 69","breakdown":{"Stones":75000,"Juice":65000,"Fusions":105600,"Shards":0,"Gold":30000,"Free taps":70000,"Quality":2700,"Ability stones":0,"Bracelets":400,"Accessories":0,"Karma":27000,"Random Astrogems":4200,"Elysian ticket":0,"Base shards":0,"Base red stones":475,"Base blue stones":64,"Base leapstones":143,"Av. gold value (Destiny)":64151.46923},"total":64151.46923},{"range":"70 - 79","breakdown":{"Stones":100000,"Juice":85000,"Fusions":140800,"Shards":0,"Gold":42000,"Free taps":90000,"Quality":3600,"Ability stones":0,"Bracelets":550,"Accessories":0,"Karma":36000,"Random Astrogems":5600,"Elysian ticket":0,"Base shards":0,"Base red stones":525,"Base blue stones":70,"Base leapstones":156,"Av. gold value (Destiny)":84783.43042},"total":84783.43042},{"range":"80 - 89","breakdown":{"Stones":140000,"Juice":120000,"Fusions":192000,"Shards":0,"Gold":60000,"Free taps":130000,"Quality":5000,"Ability stones":0,"Bracelets":750,"Accessories":0,"Karma":48000,"Random Astrogems":8400,"Elysian ticket":0,"Base shards":0,"Base red stones":575,"Base blue stones":76,"Base leapstones":169,"Av. gold value (Destiny)":117926.9301},"total":117926.9301},{"range":"90 - 99","breakdown":{"Stones":200000,"Juice":170000,"Fusions":272000,"Shards":0,"Gold":80000,"Free taps":180000,"Quality":7500,"Ability stones":0,"Bracelets":1100,"Accessories":0,"Karma":72000,"Random Astrogems":11200,"Elysian ticket":0,"Base shards":0,"Base red stones":600,"Base blue stones":84,"Base leapstones":182,"Av. gold value (Destiny)":166111.7573},"total":166111.7573},{"range":"100","breakdown":{"Stones":325000,"Juice":280000,"Fusions":448000,"Shards":0,"Gold":115000,"Free taps":300000,"Quality":12000,"Ability stones":0,"Bracelets":1800,"Accessories":0,"Karma":120000,"Random Astrogems":14000,"Elysian ticket":0,"Base shards":0,"Base red stones":700,"Base blue stones":90,"Base leapstones":195,"Av. gold value (Destiny)":271045.8339},"total":271045.8339}],"ilvl":1700,"mode":"Destiny","label":"1700 Destiny Rewards","is_old":false},{"columns":["Stones","Juice","Fusions","Shards","Gold","Free taps","Quality","Ability stones","Bracelets","Accessories","Karma","Elysian ticket","Base shards","Base red stones","Base blue stones","Base leapstones","_","Av. gold value (Destiny)"],"floors":[{"range":"0 - 9","rewards":{"Stones":1800.0,"Juice":8.0,"Fusions":85.0,"Shards":12.0,"Gold":3500.0,"Free taps":80.0,"Quality":7.0,"Ability stones":4.0,"Bracelets":6.0,"Accessories":2.0,"Karma":4.0,"Base shards":1.8,"Base red stones":40.0,"Base blue stones":250.0,"Base leapstones":5.0}},{"range":"10 - 19","rewards":{"Stones":2500.0,"Juice":12.0,"Fusions":125.0,"Shards":16.0,"Gold":5500.0,"Free taps":130.0,"Quality":10.0,"Ability stones":6.0,"Bracelets":8.0,"Accessories":4.0,"Karma":6.0,"Base shards":2.2,"Base red stones":48.0,"Base blue stones":320.0,"Base leapstones":6.0}},{"range":"20 - 29","rewards":{"Stones":3500.0,"Juice":15.0,"Fusions":165.0,"Shards":21.0,"Gold":7500.0,"Free taps":180.0,"Quality":15.0,"Ability stones":8.0,"Bracelets":10.0,"Accessories":6.0,"Karma":9.0,"Base shards":2.6,"Base red stones":58.0,"Base blue stones":380.0,"Base leapstones":7.0}},{"range":"30 - 39","rewards":{"Stones":4200.0,"Juice":20.0,"Fusions":210.0,"Shards":27.0,"Gold":9000.0,"Free taps":210.0,"Quality":20.0,"Ability stones":10.0,"Bracelets":12.0,"Accessories":8.0,"Karma":12.0,"Base shards":3.0,"Base red stones":68.0,"Base blue stones":450.0,"Base leapstones":8.0}},{"range":"40 - 49","rewards":{"Stones":6400.0,"Juice":30.0,"Fusions":310.0,"Shards":42.0,"Gold":13500.0,"Free taps":320.0,"Quality":27.0,"Ability stones":15.0,"Bracelets":18.0,"Accessories":12.0,"Karma":15.0,"Base shards":3.5,"Base red stones":76.0,"Base blue stones":520.0,"Base leapstones":9.0}},{"range":"50 - 59","rewards":{"Stones":8500.0,"Juice":40.0,"Fusions":415.0,"Shards":56.0,"Gold":18000.0,"Free taps":430.0,"Quality":36.0,"Ability stones":20.0,"Bracelets":25.0,"Accessories":18.0,"Karma":20.0,"Elysian ticket":2.0,"Base shards":4.0,"Base red stones":86.0,"Base blue stones":580.0,"Base leapstones":10.0}},{"range":"60 - 69","rewards":{"Stones":12000.0,"Juice":60.0,"Fusions":630.0,"Shards":84.0,"Gold":27000.0,"Free taps":650.0,"Quality":54.0,"Ability stones":30.0,"Bracelets":35.0,"Accessories":24.0,"Karma":30.0,"Elysian ticket":4.0,"Base shards":4.4,"Base red stones":95.0,"Base blue stones":640.0,"Base leapstones":11.0}},{"range":"70 - 79","rewards":{"Stones":18000.0,"Juice":75.0,"Fusions":830.0,"Shards":120.0,"Gold":36000.0,"Free taps":860.0,"Quality":72.0,"Ability stones":40.0,"Bracelets":50.0,"Accessories":32.0,"Karma":45.0,"Elysian ticket":7.0,"Base shards":4.8,"Base red stones":105.0,"Base blue stones":700.0,"Base leapstones":12.0}},{"range":"80 - 89","rewards":{"Stones":24000.0,"Juice":105.0,"Fusions":1150.0,"Shards":160.0,"Gold":50000.0,"Free taps":1200.0,"Quality":100.0,"Ability stones":60.0,"Bracelets":70.0,"Accessories":48.0,"Karma":60.0,"Elysian ticket":10.0,"Base shards":5.2,"Base red stones":115.0,"Base blue stones":760.0,"Base leapstones":13.0}},{"range":"90 - 99","rewards":{"Stones":35000.0,"Juice":155.0,"Fusions":1650.0,"Shards":220.0,"Gold":72000.0,"Free taps":1700.0,"Quality":144.0,"Ability stones":80.0,"Bracelets":90.0,"Accessories":64.0,"Karma":90.0,"Elysian ticket":15.0,"Base shards":5.6,"Base red stones":120.0,"Base blue stones":840.0,"Base leapstones":14.0}},{"range":"100","rewards":{"Stones":56000.0,"Juice":256.0,"Fusions":2750.0,"Shards":380.0,"Gold":108000.0,"Free taps":2800.0,"Quality":250.0,"Ability stones":120.0,"Bracelets":150.0,"Accessories":100.0,"Karma":150.0,"Elysian ticket":20.0,"Base shards":6.0,"Base red stones":140.0,"Base blue stones":900.0,"Base leapstones":15.0}}],"unit_gold_value":{"Stones":5,"Juice":1000,"Fusions":160,"Shards":0,"Gold":1,"Free taps":100,"Quality":50,"Ability stones":0,"Bracelets":10,"Accessories":0,"Karma":600,"Elysian ticket":0,"Base shards":0,"Base red stones":5,"Base blue stones":0.1,"Base leapstones":13},"gold_value_per_floor":[{"range":"0 - 9","breakdown":{"Stones":9000,"Juice":8000,"Fusions":13600,"Shards":0,"Gold":3500,"Free taps":8000,"Quality":350,"Ability stones":0,"Bracelets":60,"Accessories":0,"Karma":2400,"Base shards":0,"Base red stones":200,"Base blue stones":25,"Base leapstones":65,"Av. gold value (Destiny)":8917.439394},"total":8917.439394},{"range":"10 - 19","breakdown":{"Stones":12500,"Juice":12000,"Fusions":20000,"Shards":0,"Gold":5500,"Free taps":13000,"Quality":500,"Ability stones":0,"Bracelets":80,"Accessories":0,"Karma":3600,"Base shards":0,"Base red stones":240,"Base blue stones":32,"Base leapstones":78,"Av. gold value (Destiny)":13149.71212},"total":13149.71212},{"range":"20 - 29","breakdown":{"Stones":17500,"Juice":15000,"Fusions":26400,"Shards":0,"Gold":7500,"Free taps":18000,"Quality":750,"Ability stones":0,"Bracelets":100,"Accessories":0,"Karma":5400,"Base shards":0,"Base red stones":290,"Base blue stones":38,"Base leapstones":91,"Av. gold value (Destiny)":17609.89242},"total":17609.89242},{"range":"30 - 39","breakdown":{"Stones":21000,"Juice":20000,"Fusions":33600,"Shards":0,"Gold":9000,"Free taps":21000,"Quality":1000,"Ability stones":0,"Bracelets":120,"Accessories":0,"Karma":7200,"Base shards":0,"Base red stones":340,"Base blue stones":45,"Base leapstones":104,"Av. gold value (Destiny)":21807.78636},"total":21807.78636},{"range":"40 - 49","breakdown":{"Stones":32000,"Juice":30000,"Fusions":49600,"Shards":0,"Gold":13500,"Free taps":32000,"Quality":1350,"Ability stones":0,"Bracelets":180,"Accessories":0,"Karma":9000,"Base shards":0,"Base red stones":380,"Base blue stones":52,"Base leapstones":117,"Av. gold value (Destiny)":32323.81667},"total":32323.81667},{"range":"50 - 59","breakdown":{"Stones":42500,"Juice":40000,"Fusions":66400,"Shards":0,"Gold":18000,"Free taps":43000,"Quality":1800,"Ability stones":0,"Bracelets":250,"Accessories":0,"Karma":12000,"Elysian ticket":0,"Base shards":0,"Base red stones":430,"Base blue stones":58,"Base leapstones":130,"Av. gold value (Destiny)":40900.20909},"total":40900.20909},{"range":"60 - 69","breakdown":{"Stones":60000,"Juice":60000,"Fusions":100800,"Shards":0,"Gold":27000,"Free taps":65000,"Quality":2700,"Ability stones":0,"Bracelets":350,"Accessories":0,"Karma":18000,"Elysian ticket":0,"Base shards":0,"Base red stones":475,"Base blue stones":64,"Base leapstones":143,"Av. gold value (Destiny)":60807.51818},"total":60807.51818},{"range":"70 - 79","breakdown":{"Stones":90000,"Juice":75000,"Fusions":132800,"Shards":0,"Gold":36000,"Free taps":86000,"Quality":3600,"Ability stones":0,"Bracelets":500,"Accessories":0,"Karma":27000,"Elysian ticket":0,"Base shards":0,"Base red stones":525,"Base blue stones":70,"Base leapstones":156,"Av. gold value (Destiny)":81695.66818},"total":81695.66818},{"range":"80 - 89","breakdown":{"Stones":120000,"Juice":105000,"Fusions":184000,"Shards":0,"Gold":50000,"Free taps":120000,"Quality":5000,"Ability stones":0,"Bracelets":700,"Accessories":0,"Karma":36000,"Elysian ticket":0,"Base shards":0,"Base red stones":575,"Base blue stones":76,"Base leapstones":169,"Av. gold value (Destiny)":112126.0909},"total":112126.0909},{"range":"90 - 99","breakdown":{"Stones":175000,"Juice":155000,"Fusions":264000,"Shards":0,"Gold":72000,"Free taps":170000,"Quality":7200,"Ability stones":0,"Bracelets":900,"Accessories":0,"Karma":54000,"Elysian ticket":0,"Base shards":0,"Base red stones":600,"Base blue stones":84,"Base leapstones":182,"Av. gold value (Destiny)":161416.3727},"total":161416.3727},{"range":"100","breakdown":{"Stones":280000,"Juice":256000,"Fusions":440000,"Shards":0,"Gold":108000,"Free taps":280000,"Quality":12500,"Ability stones":0,"Bracelets":1500,"Accessories":0,"Karma":90000,"Elysian ticket":0,"Base shards":0,"Base red stones":700,"Base blue stones":90,"Base leapstones":195,"Av. gold value (Destiny)":264057.0227},"total":264057.0227}],"ilvl":1680,"mode":"Destiny","label":"1680 Destiny Rewards","is_old":false},{"columns":["Stones","Juice","Fusions","Shards","Gold","Free taps","Quality","Ability stones","Bracelets","Accessories","Elysian ticket","Base shards","Base red stones","Base blue stones","Base leapstones","_","Av. gold value (Destiny)"],"floors":[{"range":"0 - 9","rewards":{"Stones":1000.0,"Juice":6.0,"Fusions":60.0,"Shards":8.0,"Gold":3200.0,"Free taps":60.0,"Quality":7.0,"Ability stones":2.0,"Bracelets":4.0,"Accessories":2.0,"Base shards":1.3,"Base red stones":22.0,"Base blue stones":150.0,"Base leapstones":2.0}},{"range":"10 - 19","rewards":{"Stones":1500.0,"Juice":9.0,"Fusions":90.0,"Shards":12.0,"Gold":4800.0,"Free taps":90.0,"Quality":10.0,"Ability stones":4.0,"Bracelets":6.0,"Accessories":4.0,"Base shards":1.6,"Base red stones":28.0,"Base blue stones":200.0,"Base leapstones":3.0}},{"range":"20 - 29","rewards":{"Stones":2000.0,"Juice":12.0,"Fusions":125.0,"Shards":16.0,"Gold":6400.0,"Free taps":130.0,"Quality":15.0,"Ability stones":6.0,"Bracelets":8.0,"Accessories":6.0,"Base shards":2.0,"Base red stones":35.0,"Base blue stones":240.0,"Base leapstones":4.0}},{"range":"30 - 39","rewards":{"Stones":2500.0,"Juice":15.0,"Fusions":150.0,"Shards":20.0,"Gold":8000.0,"Free taps":160.0,"Quality":20.0,"Ability stones":8.0,"Bracelets":10.0,"Accessories":8.0,"Base shards":2.3,"Base red stones":40.0,"Base blue stones":280.0,"Base leapstones":5.0}},{"range":"40 - 49","rewards":{"Stones":3500.0,"Juice":22.0,"Fusions":225.0,"Shards":30.0,"Gold":12000.0,"Free taps":200.0,"Quality":27.0,"Ability stones":10.0,"Bracelets":15.0,"Accessories":12.0,"Base shards":2.6,"Base red stones":45.0,"Base blue stones":320.0,"Base leapstones":6.0}},{"range":"50 - 59","rewards":{"Stones":5000.0,"Juice":30.0,"Fusions":300.0,"Shards":40.0,"Gold":16000.0,"Free taps":320.0,"Quality":36.0,"Ability stones":15.0,"Bracelets":20.0,"Accessories":18.0,"Elysian ticket":2.0,"Base shards":3.0,"Base red stones":50.0,"Base blue stones":360.0,"Base leapstones":7.0}},{"range":"60 - 69","rewards":{"Stones":7500.0,"Juice":45.0,"Fusions":450.0,"Shards":60.0,"Gold":24000.0,"Free taps":450.0,"Quality":54.0,"Ability stones":20.0,"Bracelets":25.0,"Accessories":24.0,"Elysian ticket":4.0,"Base shards":3.2,"Base red stones":55.0,"Base blue stones":390.0,"Base leapstones":8.0}},{"range":"70 - 79","rewards":{"Stones":10000.0,"Juice":58.0,"Fusions":600.0,"Shards":80.0,"Gold":32000.0,"Free taps":650.0,"Quality":72.0,"Ability stones":25.0,"Bracelets":35.0,"Accessories":32.0,"Elysian ticket":7.0,"Base shards":3.6,"Base red stones":62.0,"Base blue stones":430.0,"Base leapstones":9.0}},{"range":"80 - 89","rewards":{"Stones":15000.0,"Juice":80.0,"Fusions":850.0,"Shards":108.0,"Gold":44000.0,"Free taps":850.0,"Quality":100.0,"Ability stones":35.0,"Bracelets":50.0,"Accessories":48.0,"Elysian ticket":10.0,"Base shards":3.9,"Base red stones":66.0,"Base blue stones":470.0,"Base leapstones":10.0}},{"range":"90 - 99","rewards":{"Stones":20000.0,"Juice":120.0,"Fusions":1200.0,"Shards":160.0,"Gold":64000.0,"Free taps":1250.0,"Quality":144.0,"Ability stones":50.0,"Bracelets":80.0,"Accessories":64.0,"Elysian ticket":15.0,"Base shards":4.2,"Base red stones":72.0,"Base blue stones":510.0,"Base leapstones":11.0}},{"range":"100","rewards":{"Stones":35000.0,"Juice":190.0,"Fusions":2000.0,"Shards":260.0,"Gold":96000.0,"Free taps":2100.0,"Quality":250.0,"Ability stones":80.0,"Bracelets":120.0,"Accessories":100.0,"Elysian ticket":20.0,"Base shards":4.5,"Base red stones":78.0,"Base blue stones":550.0,"Base leapstones":12.0}}],"unit_gold_value":{"Stones":5,"Juice":1000,"Fusions":160,"Shards":0,"Gold":1,"Free taps":100,"Quality":50,"Ability stones":0,"Bracelets":10,"Accessories":0,"Elysian ticket":0,"Base shards":0,"Base red stones":5,"Base blue stones":0.1,"Base leapstones":13},"gold_value_per_floor":[{"range":"0 - 9","breakdown":{"Stones":5000,"Juice":6000,"Fusions":9600,"Shards":0,"Gold":3200,"Free taps":6000,"Quality":350,"Ability stones":0,"Bracelets":40,"Accessories":0,"Base shards":0,"Base red stones":110,"Base blue stones":15,"Base leapstones":26,"Av. gold value (Destiny)":6444.016667},"total":6444.016667},{"range":"10 - 19","breakdown":{"Stones":7500,"Juice":9000,"Fusions":14400,"Shards":0,"Gold":4800,"Free taps":9000,"Quality":500,"Ability stones":0,"Bracelets":60,"Accessories":0,"Base shards":0,"Base red stones":140,"Base blue stones":20,"Base leapstones":39,"Av. gold value (Destiny)":9627.65},"total":9627.65},{"range":"20 - 29","breakdown":{"Stones":10000,"Juice":12000,"Fusions":20000,"Shards":0,"Gold":6400,"Free taps":13000,"Quality":750,"Ability stones":0,"Bracelets":80,"Accessories":0,"Base shards":0,"Base red stones":175,"Base blue stones":24,"Base leapstones":52,"Av. gold value (Destiny)":13295.01667},"total":13295.01667},{"range":"30 - 39","breakdown":{"Stones":12500,"Juice":15000,"Fusions":24000,"Shards":0,"Gold":8000,"Free taps":16000,"Quality":1000,"Ability stones":0,"Bracelets":100,"Accessories":0,"Base shards":0,"Base red stones":200,"Base blue stones":28,"Base leapstones":65,"Av. gold value (Destiny)":16235.55},"total":16235.55},{"range":"40 - 49","breakdown":{"Stones":17500,"Juice":22000,"Fusions":36000,"Shards":0,"Gold":12000,"Free taps":20000,"Quality":1350,"Ability stones":0,"Bracelets":150,"Accessories":0,"Base shards":0,"Base red stones":225,"Base blue stones":32,"Base leapstones":78,"Av. gold value (Destiny)":23144.33333},"total":23144.33333},{"range":"50 - 59","breakdown":{"Stones":25000,"Juice":30000,"Fusions":48000,"Shards":0,"Gold":16000,"Free taps":32000,"Quality":1800,"Ability stones":0,"Bracelets":200,"Accessories":0,"Elysian ticket":0,"Base shards":0,"Base red stones":250,"Base blue stones":36,"Base leapstones":91,"Av. gold value (Destiny)":30425.31364},"total":30425.31364},{"range":"60 - 69","breakdown":{"Stones":37500,"Juice":45000,"Fusions":72000,"Shards":0,"Gold":24000,"Free taps":45000,"Quality":2700,"Ability stones":0,"Bracelets":250,"Accessories":0,"Elysian ticket":0,"Base shards":0,"Base red stones":275,"Base blue stones":39,"Base leapstones":104,"Av. gold value (Destiny)":44782.48182},"total":44782.48182},{"range":"70 - 79","breakdown":{"Stones":50000,"Juice":58000,"Fusions":96000,"Shards":0,"Gold":32000,"Free taps":65000,"Quality":3600,"Ability stones":0,"Bracelets":350,"Accessories":0,"Elysian ticket":0,"Base shards":0,"Base red stones":310,"Base blue stones":43,"Base leapstones":117,"Av. gold value (Destiny)":60344.19697},"total":60344.19697},{"range":"80 - 89","breakdown":{"Stones":75000,"Juice":80000,"Fusions":136000,"Shards":0,"Gold":44000,"Free taps":85000,"Quality":5000,"Ability stones":0,"Bracelets":500,"Accessories":0,"Elysian ticket":0,"Base shards":0,"Base red stones":330,"Base blue stones":47,"Base leapstones":130,"Av. gold value (Destiny)":83763.23788},"total":83763.23788},{"range":"90 - 99","breakdown":{"Stones":100000,"Juice":120000,"Fusions":192000,"Shards":0,"Gold":64000,"Free taps":125000,"Quality":7200,"Ability stones":0,"Bracelets":800,"Accessories":0,"Elysian ticket":0,"Base shards":0,"Base red stones":360,"Base blue stones":51,"Base leapstones":143,"Av. gold value (Destiny)":119758.8091},"total":119758.8091},{"range":"100","breakdown":{"Stones":175000,"Juice":190000,"Fusions":320000,"Shards":0,"Gold":96000,"Free taps":210000,"Quality":12500,"Ability stones":0,"Bracelets":1200,"Accessories":0,"Elysian ticket":0,"Base shards":0,"Base red stones":390,"Base blue stones":55,"Base leapstones":156,"Av. gold value (Destiny)":197945.8955},"total":197945.8955}],"ilvl":1640,"mode":"Destiny","label":"1640 Destiny Rewards","is_old":false},{"columns":["Gold","Quality","Ability stones","Bracelets","Accessories","Karma","Engravings","Random Astrogems","Selectable Astrogems","Cards","Lv. 8 Gems","_","Av. gold value"],"floors":[{"range":"0 - 9","rewards":{"Gold":22500.0,"Quality":35.0,"Ability stones":40.0,"Bracelets":40.0,"Accessories":20.0,"Karma":35.0,"Engravings":4.0,"Random Astrogems":"15|0|0","Selectable Astrogems":"15|0|0","Cards":1.0}},{"range":"10 - 19","rewards":{"Gold":36000.0,"Quality":50.0,"Ability stones":50.0,"Bracelets":50.0,"Accessories":30.0,"Karma":60.0,"Engravings":6.0,"Random Astrogems":"20|0|0","Selectable Astrogems":"25|0|0","Cards":1.8}},{"range":"20 - 29","rewards":{"Gold":47500.0,"Quality":75.0,"Ability stones":75.0,"Bracelets":65.0,"Accessories":40.0,"Karma":75.0,"Engravings":8.0,"Random Astrogems":"30|0|0","Selectable Astrogems":"0|5|0","Cards":2.6}},{"range":"30 - 39","rewards":{"Gold":60000.0,"Quality":100.0,"Ability stones":100.0,"Bracelets":80.0,"Accessories":60.0,"Karma":90.0,"Engravings":10.0,"Random Astrogems":"40|0|0","Selectable Astrogems":"5|5|0","Cards":3.6}},{"range":"40 - 49","rewards":{"Gold":80000.0,"Quality":135.0,"Ability stones":125.0,"Bracelets":120.0,"Accessories":80.0,"Karma":135.0,"Engravings":15.0,"Random Astrogems":"50|0|0","Selectable Astrogems":"5|5|0","Cards":5}},{"range":"50 - 59","rewards":{"Gold":110000.0,"Quality":180.0,"Ability stones":150.0,"Bracelets":160.0,"Accessories":110.0,"Karma":180.0,"Engravings":20.0,"Random Astrogems":"0|15|0","Selectable Astrogems":"0|10|0","Cards":7.4}},{"range":"60 - 69","rewards":{"Gold":160000.0,"Quality":270.0,"Ability stones":225.0,"Bracelets":210.0,"Accessories":150.0,"Karma":270.0,"Engravings":27.0,"Random Astrogems":"0|20|0","Selectable Astrogems":"0|15|0","Cards":9.8}},{"range":"70 - 79","rewards":{"Gold":225000.0,"Quality":360.0,"Ability stones":300.0,"Bracelets":300.0,"Accessories":200.0,"Karma":360.0,"Engravings":35.0,"Random Astrogems":"0|30|0","Selectable Astrogems":"0|0|5","Cards":13.4}},{"range":"80 - 89","rewards":{"Gold":325000.0,"Quality":500.0,"Ability stones":400.0,"Bracelets":400.0,"Accessories":300.0,"Karma":500.0,"Engravings":50.0,"Random Astrogems":"0|40|0","Selectable Astrogems":"0|5|5","Cards":17.4,"Lv. 8 Gems":4.0}},{"range":"90 - 99","rewards":{"Gold":475000.0,"Quality":720.0,"Ability stones":600.0,"Bracelets":600.0,"Accessories":400.0,"Karma":750.0,"Engravings":70.0,"Random Astrogems":"0|50|0","Selectable Astrogems":"0|0|10","Cards":25,"Lv. 8 Gems":5.0}},{"range":"100","rewards":{"Gold":650000.0,"Quality":1250.0,"Ability stones":1000.0,"Bracelets":1000.0,"Accessories":600.0,"Karma":1200.0,"Engravings":100.0,"Random Astrogems":"0|75|0","Selectable Astrogems":"0|0|15","Cards":37,"Lv. 8 Gems":6.0}}],"unit_gold_value":{"Gold":1,"Quality":50,"Ability stones":0,"Bracelets":10,"Accessories":0,"Karma":600,"Engravings":0,"Random Astrogems":0,"Selectable Astrogems":0,"Cards":0,"Lv. 8 Gems":300000},"gold_value_per_floor":[{"range":"0 - 9","breakdown":{"Gold":22500,"Quality":1750,"Ability stones":0,"Bracelets":400,"Accessories":0,"Karma":21000,"Engravings":0,"Random Astrogems":4200,"Selectable Astrogems":0,"Cards":0,"Av. gold value":12637.08333},"total":12637.08333},{"range":"10 - 19","breakdown":{"Gold":36000,"Quality":2500,"Ability stones":0,"Bracelets":500,"Accessories":0,"Karma":36000,"Engravings":0,"Random Astrogems":5600,"Selectable Astrogems":0,"Cards":0,"Av. gold value":20534.16667},"total":20534.16667},{"range":"20 - 29","breakdown":{"Gold":47500,"Quality":3750,"Ability stones":0,"Bracelets":650,"Accessories":0,"Karma":45000,"Engravings":0,"Random Astrogems":8400,"Selectable Astrogems":2500,"Cards":0,"Av. gold value":26929.58333},"total":26929.58333},{"range":"30 - 39","breakdown":{"Gold":60000,"Quality":5000,"Ability stones":0,"Bracelets":800,"Accessories":0,"Karma":54000,"Engravings":0,"Random Astrogems":11200,"Selectable Astrogems":2500,"Cards":0,"Av. gold value":33433.33333},"total":33433.33333},{"range":"40 - 49","breakdown":{"Gold":80000,"Quality":6750,"Ability stones":0,"Bracelets":1200,"Accessories":0,"Karma":81000,"Engravings":0,"Random Astrogems":14000,"Selectable Astrogems":2500,"Cards":0,"Av. gold value":46528.75},"total":46528.75},{"range":"50 - 59","breakdown":{"Gold":110000,"Quality":9000,"Ability stones":0,"Bracelets":1600,"Accessories":0,"Karma":108000,"Engravings":0,"Random Astrogems":21000,"Selectable Astrogems":5000,"Cards":0,"Av. gold value":63496.66667},"total":63496.66667},{"range":"60 - 69","breakdown":{"Gold":160000,"Quality":13500,"Ability stones":0,"Bracelets":2100,"Accessories":0,"Karma":162000,"Engravings":0,"Random Astrogems":28000,"Selectable Astrogems":7500,"Cards":0,"Av. gold value":93250.83333},"total":93250.83333},{"range":"70 - 79","breakdown":{"Gold":225000,"Quality":18000,"Ability stones":0,"Bracelets":3000,"Accessories":0,"Karma":216000,"Engravings":0,"Random Astrogems":42000,"Selectable Astrogems":25000,"Cards":0,"Av. gold value":130025},"total":130025},{"range":"80 - 89","breakdown":{"Gold":325000,"Quality":25000,"Ability stones":0,"Bracelets":4000,"Accessories":0,"Karma":300000,"Engravings":0,"Random Astrogems":56000,"Selectable Astrogems":27500,"Cards":0,"Lv. 8 Gems":1200000,"Av. gold value":460378.7879},"total":460378.7879},{"range":"90 - 99","breakdown":{"Gold":475000,"Quality":36000,"Ability stones":0,"Bracelets":6000,"Accessories":0,"Karma":450000,"Engravings":0,"Random Astrogems":70000,"Selectable Astrogems":50000,"Cards":0,"Lv. 8 Gems":1500000,"Av. gold value":604945.4545},"total":604945.4545},{"range":"100","breakdown":{"Gold":650000,"Quality":62500,"Ability stones":0,"Bracelets":10000,"Accessories":0,"Karma":720000,"Engravings":0,"Random Astrogems":105000,"Selectable Astrogems":75000,"Cards":0,"Lv. 8 Gems":1800000,"Av. gold value":782636.3636},"total":782636.3636}],"ilvl":1730,"mode":"FlameFrost","label":"1730 FlameFrost Rewards","is_old":false},{"columns":["Gold","Quality","Ability stones","Bracelets","Accessories","Karma","Engravings","Random Astrogems","Selectable Astrogems","Cards","Lv. 8 Gems","_","Av. gold value"],"floors":[{"range":"0 - 9","rewards":{"Gold":22500.0,"Quality":35.0,"Ability stones":40.0,"Bracelets":40.0,"Accessories":20.0,"Karma":35.0,"Engravings":4.0,"Random Astrogems":"15|0|0","Selectable Astrogems":"15|0|0","Cards":1.0}},{"range":"10 - 19","rewards":{"Gold":36000.0,"Quality":50.0,"Ability stones":50.0,"Bracelets":50.0,"Accessories":30.0,"Karma":60.0,"Engravings":6.0,"Random Astrogems":"20|0|0","Selectable Astrogems":"25|0|0","Cards":1.8}},{"range":"20 - 29","rewards":{"Gold":47500.0,"Quality":75.0,"Ability stones":75.0,"Bracelets":65.0,"Accessories":40.0,"Karma":75.0,"Engravings":8.0,"Random Astrogems":"30|0|0","Selectable Astrogems":"0|5|0","Cards":2.6}},{"range":"30 - 39","rewards":{"Gold":60000.0,"Quality":100.0,"Ability stones":100.0,"Bracelets":80.0,"Accessories":60.0,"Karma":90.0,"Engravings":10.0,"Random Astrogems":"40|0|0","Selectable Astrogems":"5|5|0","Cards":3.6}},{"range":"40 - 49","rewards":{"Gold":80000.0,"Quality":135.0,"Ability stones":125.0,"Bracelets":120.0,"Accessories":80.0,"Karma":135.0,"Engravings":15.0,"Random Astrogems":"50|0|0","Selectable Astrogems":"5|5|0","Cards":5}},{"range":"50 - 59","rewards":{"Gold":110000.0,"Quality":180.0,"Ability stones":150.0,"Bracelets":160.0,"Accessories":110.0,"Karma":180.0,"Engravings":20.0,"Random Astrogems":"0|15|0","Selectable Astrogems":"0|10|0","Cards":7.4}},{"range":"60 - 69","rewards":{"Gold":160000.0,"Quality":270.0,"Ability stones":225.0,"Bracelets":210.0,"Accessories":150.0,"Karma":270.0,"Engravings":27.0,"Random Astrogems":"0|20|0","Selectable Astrogems":"0|15|0","Cards":9.8}},{"range":"70 - 79","rewards":{"Gold":225000.0,"Quality":360.0,"Ability stones":300.0,"Bracelets":300.0,"Accessories":200.0,"Karma":360.0,"Engravings":35.0,"Random Astrogems":"0|30|0","Selectable Astrogems":"0|0|5","Cards":13.4}},{"range":"80 - 89","rewards":{"Gold":325000.0,"Quality":500.0,"Ability stones":400.0,"Bracelets":400.0,"Accessories":300.0,"Karma":500.0,"Engravings":50.0,"Random Astrogems":"0|40|0","Selectable Astrogems":"0|5|5","Cards":17.4,"Lv. 8 Gems":4.0}},{"range":"90 - 99","rewards":{"Gold":475000.0,"Quality":720.0,"Ability stones":600.0,"Bracelets":600.0,"Accessories":400.0,"Karma":750.0,"Engravings":70.0,"Random Astrogems":"0|50|0","Selectable Astrogems":"0|0|10","Cards":25,"Lv. 8 Gems":5.0}},{"range":"100","rewards":{"Gold":650000.0,"Quality":1250.0,"Ability stones":1000.0,"Bracelets":1000.0,"Accessories":600.0,"Karma":1200.0,"Engravings":100.0,"Random Astrogems":"0|75|0","Selectable Astrogems":"0|0|15","Cards":37,"Lv. 8 Gems":6.0}}],"unit_gold_value":{"Gold":1,"Quality":50,"Ability stones":0,"Bracelets":10,"Accessories":0,"Karma":600,"Engravings":0,"Random Astrogems":0,"Selectable Astrogems":0,"Cards":0,"Lv. 8 Gems":300000},"gold_value_per_floor":[{"range":"0 - 9","breakdown":{"Gold":22500,"Quality":1750,"Ability stones":0,"Bracelets":400,"Accessories":0,"Karma":21000,"Engravings":0,"Random Astrogems":4200,"Selectable Astrogems":0,"Cards":0,"Av. gold value":12637.08333},"total":12637.08333},{"range":"10 - 19","breakdown":{"Gold":36000,"Quality":2500,"Ability stones":0,"Bracelets":500,"Accessories":0,"Karma":36000,"Engravings":0,"Random Astrogems":5600,"Selectable Astrogems":0,"Cards":0,"Av. gold value":20534.16667},"total":20534.16667},{"range":"20 - 29","breakdown":{"Gold":47500,"Quality":3750,"Ability stones":0,"Bracelets":650,"Accessories":0,"Karma":45000,"Engravings":0,"Random Astrogems":8400,"Selectable Astrogems":2500,"Cards":0,"Av. gold value":26929.58333},"total":26929.58333},{"range":"30 - 39","breakdown":{"Gold":60000,"Quality":5000,"Ability stones":0,"Bracelets":800,"Accessories":0,"Karma":54000,"Engravings":0,"Random Astrogems":11200,"Selectable Astrogems":2500,"Cards":0,"Av. gold value":33433.33333},"total":33433.33333},{"range":"40 - 49","breakdown":{"Gold":80000,"Quality":6750,"Ability stones":0,"Bracelets":1200,"Accessories":0,"Karma":81000,"Engravings":0,"Random Astrogems":14000,"Selectable Astrogems":2500,"Cards":0,"Av. gold value":46528.75},"total":46528.75},{"range":"50 - 59","breakdown":{"Gold":110000,"Quality":9000,"Ability stones":0,"Bracelets":1600,"Accessories":0,"Karma":108000,"Engravings":0,"Random Astrogems":21000,"Selectable Astrogems":5000,"Cards":0,"Av. gold value":63496.66667},"total":63496.66667},{"range":"60 - 69","breakdown":{"Gold":160000,"Quality":13500,"Ability stones":0,"Bracelets":2100,"Accessories":0,"Karma":162000,"Engravings":0,"Random Astrogems":28000,"Selectable Astrogems":7500,"Cards":0,"Av. gold value":93250.83333},"total":93250.83333},{"range":"70 - 79","breakdown":{"Gold":225000,"Quality":18000,"Ability stones":0,"Bracelets":3000,"Accessories":0,"Karma":216000,"Engravings":0,"Random Astrogems":42000,"Selectable Astrogems":25000,"Cards":0,"Av. gold value":130025},"total":130025},{"range":"80 - 89","breakdown":{"Gold":325000,"Quality":25000,"Ability stones":0,"Bracelets":4000,"Accessories":0,"Karma":300000,"Engravings":0,"Random Astrogems":56000,"Selectable Astrogems":27500,"Cards":0,"Lv. 8 Gems":1200000,"Av. gold value":460378.7879},"total":460378.7879},{"range":"90 - 99","breakdown":{"Gold":475000,"Quality":36000,"Ability stones":0,"Bracelets":6000,"Accessories":0,"Karma":450000,"Engravings":0,"Random Astrogems":70000,"Selectable Astrogems":50000,"Cards":0,"Lv. 8 Gems":1500000,"Av. gold value":604945.4545},"total":604945.4545},{"range":"100","breakdown":{"Gold":650000,"Quality":62500,"Ability stones":0,"Bracelets":10000,"Accessories":0,"Karma":720000,"Engravings":0,"Random Astrogems":105000,"Selectable Astrogems":75000,"Cards":0,"Lv. 8 Gems":1800000,"Av. gold value":782636.3636},"total":782636.3636}],"ilvl":1730,"mode":"FlameFrost","label":"Old 1730 FlameFrost Rewards","is_old":true},{"columns":["Gold","Quality","Ability stones","Bracelets","Accessories","Karma","Engravings","Random Astrogems","Cards","Lv. 8 Gems","_","Av. gold value"],"floors":[{"range":"0 - 9","rewards":{"Gold":20000.0,"Quality":35.0,"Ability stones":30.0,"Bracelets":35.0,"Accessories":15.0,"Karma":30.0,"Engravings":3.0,"Random Astrogems":"10|0|0","Cards":1.0}},{"range":"10 - 19","rewards":{"Gold":30000.0,"Quality":50.0,"Ability stones":40.0,"Bracelets":45.0,"Accessories":25.0,"Karma":45.0,"Engravings":5.0,"Random Astrogems":"15|0|0","Cards":1.8}},{"range":"20 - 29","rewards":{"Gold":40000.0,"Quality":75.0,"Ability stones":50.0,"Bracelets":60.0,"Accessories":35.0,"Karma":60.0,"Engravings":7.0,"Random Astrogems":"20|0|0","Cards":2.6}},{"range":"30 - 39","rewards":{"Gold":50000.0,"Quality":100.0,"Ability stones":60.0,"Bracelets":75.0,"Accessories":50.0,"Karma":75.0,"Engravings":9.0,"Random Astrogems":"30|0|0","Cards":3.6}},{"range":"40 - 49","rewards":{"Gold":70000.0,"Quality":135.0,"Ability stones":90.0,"Bracelets":110.0,"Accessories":75.0,"Karma":100.0,"Engravings":12.0,"Random Astrogems":"40|0|0","Cards":5}},{"range":"50 - 59","rewards":{"Gold":100000.0,"Quality":180.0,"Ability stones":120.0,"Bracelets":150.0,"Accessories":100.0,"Karma":150.0,"Engravings":15.0,"Random Astrogems":"0|10|0","Cards":7.4}},{"range":"60 - 69","rewards":{"Gold":150000.0,"Quality":270.0,"Ability stones":180.0,"Bracelets":200.0,"Accessories":135.0,"Karma":225.0,"Engravings":20.0,"Random Astrogems":"0|15|0","Cards":9.8}},{"range":"70 - 79","rewards":{"Gold":210000.0,"Quality":360.0,"Ability stones":240.0,"Bracelets":275.0,"Accessories":175.0,"Karma":300.0,"Engravings":30.0,"Random Astrogems":"0|20|0","Cards":13.4}},{"range":"80 - 89","rewards":{"Gold":300000.0,"Quality":500.0,"Ability stones":300.0,"Bracelets":375.0,"Accessories":275.0,"Karma":400.0,"Engravings":45.0,"Random Astrogems":"0|30|0","Cards":17.4,"Lv. 8 Gems":3.0}},{"range":"90 - 99","rewards":{"Gold":400000.0,"Quality":720.0,"Ability stones":450.0,"Bracelets":550.0,"Accessories":350.0,"Karma":600.0,"Engravings":60.0,"Random Astrogems":"0|40|0","Cards":25,"Lv. 8 Gems":4.0}},{"range":"100","rewards":{"Gold":575000.0,"Quality":1250.0,"Ability stones":750.0,"Bracelets":900.0,"Accessories":550.0,"Karma":1000.0,"Engravings":90.0,"Random Astrogems":"0|50|0","Cards":37,"Lv. 8 Gems":5.0}}],"unit_gold_value":{"Gold":1,"Quality":50,"Ability stones":0,"Bracelets":10,"Accessories":0,"Karma":600,"Engravings":0,"Random Astrogems":0,"Cards":0,"Lv. 8 Gems":300000},"gold_value_per_floor":[{"range":"0 - 9","breakdown":{"Gold":20000,"Quality":1750,"Ability stones":0,"Bracelets":350,"Accessories":0,"Karma":18000,"Engravings":0,"Random Astrogems":2800,"Cards":0,"Av. gold value":11900},"total":11900},{"range":"10 - 19","breakdown":{"Gold":30000,"Quality":2500,"Ability stones":0,"Bracelets":450,"Accessories":0,"Karma":27000,"Engravings":0,"Random Astrogems":4200,"Cards":0,"Av. gold value":17829.7619},"total":17829.7619},{"range":"20 - 29","breakdown":{"Gold":40000,"Quality":3750,"Ability stones":0,"Bracelets":600,"Accessories":0,"Karma":36000,"Engravings":0,"Random Astrogems":5600,"Cards":0,"Av. gold value":23822.61905},"total":23822.61905},{"range":"30 - 39","breakdown":{"Gold":50000,"Quality":5000,"Ability stones":0,"Bracelets":750,"Accessories":0,"Karma":45000,"Engravings":0,"Random Astrogems":8400,"Cards":0,"Av. gold value":30065.47619},"total":30065.47619},{"range":"40 - 49","breakdown":{"Gold":70000,"Quality":6750,"Ability stones":0,"Bracelets":1100,"Accessories":0,"Karma":60000,"Engravings":0,"Random Astrogems":11200,"Cards":0,"Av. gold value":41215.47619},"total":41215.47619},{"range":"50 - 59","breakdown":{"Gold":100000,"Quality":9000,"Ability stones":0,"Bracelets":1500,"Accessories":0,"Karma":90000,"Engravings":0,"Random Astrogems":14000,"Cards":0,"Av. gold value":59511.90476},"total":59511.90476},{"range":"60 - 69","breakdown":{"Gold":150000,"Quality":13500,"Ability stones":0,"Bracelets":2000,"Accessories":0,"Karma":135000,"Engravings":0,"Random Astrogems":21000,"Cards":0,"Av. gold value":89250},"total":89250},{"range":"70 - 79","breakdown":{"Gold":210000,"Quality":18000,"Ability stones":0,"Bracelets":2750,"Accessories":0,"Karma":180000,"Engravings":0,"Random Astrogems":28000,"Cards":0,"Av. gold value":122339.2857},"total":122339.2857},{"range":"80 - 89","breakdown":{"Gold":300000,"Quality":25000,"Ability stones":0,"Bracelets":3750,"Accessories":0,"Karma":240000,"Engravings":0,"Random Astrogems":42000,"Cards":0,"Lv. 8 Gems":900000,"Av. gold value":389520.8333},"total":389520.8333},{"range":"90 - 99","breakdown":{"Gold":400000,"Quality":36000,"Ability stones":0,"Bracelets":5500,"Accessories":0,"Karma":360000,"Engravings":0,"Random Astrogems":56000,"Cards":0,"Lv. 8 Gems":1200000,"Av. gold value":526608.3333},"total":526608.3333},{"range":"100","breakdown":{"Gold":575000,"Quality":62500,"Ability stones":0,"Bracelets":9000,"Accessories":0,"Karma":600000,"Engravings":0,"Random Astrogems":70000,"Cards":0,"Lv. 8 Gems":1500000,"Av. gold value":705033.3333},"total":705033.3333}],"ilvl":1700,"mode":"FlameFrost","label":"1700 FlameFrost Rewards","is_old":false},{"columns":["Gold","Quality","Ability stones","Bracelets","Accessories","Karma","Engravings","Cards","Lv. 8 Gems","_","Av. gold value"],"floors":[{"range":"0 - 9","rewards":{"Gold":17500.0,"Quality":35.0,"Ability stones":20.0,"Bracelets":30.0,"Accessories":10.0,"Karma":20.0,"Engravings":2.0,"Cards":1.0}},{"range":"10 - 19","rewards":{"Gold":27500.0,"Quality":50.0,"Ability stones":30.0,"Bracelets":40.0,"Accessories":20.0,"Karma":30.0,"Engravings":4.0,"Cards":1.8}},{"range":"20 - 29","rewards":{"Gold":37500.0,"Quality":75.0,"Ability stones":40.0,"Bracelets":50.0,"Accessories":30.0,"Karma":45.0,"Engravings":6.0,"Cards":2.6}},{"range":"30 - 39","rewards":{"Gold":45000.0,"Quality":100.0,"Ability stones":50.0,"Bracelets":60.0,"Accessories":40.0,"Karma":60.0,"Engravings":8.0,"Cards":3.6}},{"range":"40 - 49","rewards":{"Gold":67500.0,"Quality":135.0,"Ability stones":75.0,"Bracelets":90.0,"Accessories":60.0,"Karma":75.0,"Engravings":10.0,"Cards":5}},{"range":"50 - 59","rewards":{"Gold":90000.0,"Quality":180.0,"Ability stones":100.0,"Bracelets":125.0,"Accessories":90.0,"Karma":100.0,"Engravings":12.0,"Cards":7.4}},{"range":"60 - 69","rewards":{"Gold":135000.0,"Quality":270.0,"Ability stones":150.0,"Bracelets":175.0,"Accessories":120.0,"Karma":150.0,"Engravings":18.0,"Cards":9.8}},{"range":"70 - 79","rewards":{"Gold":180000.0,"Quality":360.0,"Ability stones":200.0,"Bracelets":250.0,"Accessories":160.0,"Karma":225.0,"Engravings":24.0,"Cards":13.4}},{"range":"80 - 89","rewards":{"Gold":250000.0,"Quality":500.0,"Ability stones":300.0,"Bracelets":350.0,"Accessories":240.0,"Karma":300.0,"Engravings":36.0,"Cards":17.4,"Lv. 8 Gems":2.0}},{"range":"90 - 99","rewards":{"Gold":360000.0,"Quality":720.0,"Ability stones":400.0,"Bracelets":450.0,"Accessories":320.0,"Karma":450.0,"Engravings":48.0,"Cards":25,"Lv. 8 Gems":3.0}},{"range":"100","rewards":{"Gold":540000.0,"Quality":1250.0,"Ability stones":600.0,"Bracelets":750.0,"Accessories":500.0,"Karma":750.0,"Engravings":80.0,"Cards":37,"Lv. 8 Gems":4.0}}],"unit_gold_value":{"Gold":1,"Quality":50,"Ability stones":0,"Bracelets":10,"Accessories":0,"Karma":600,"Engravings":0,"Cards":0,"Lv. 8 Gems":300000},"gold_value_per_floor":[{"range":"0 - 9","breakdown":{"Gold":17500,"Quality":1750,"Ability stones":0,"Bracelets":300,"Accessories":0,"Karma":12000,"Engravings":0,"Cards":0,"Av. gold value":6090},"total":6090},{"range":"10 - 19","breakdown":{"Gold":27500,"Quality":2500,"Ability stones":0,"Bracelets":400,"Accessories":0,"Karma":18000,"Engravings":0,"Cards":0,"Av. gold value":9120},"total":9120},{"range":"20 - 29","breakdown":{"Gold":37500,"Quality":3750,"Ability stones":0,"Bracelets":500,"Accessories":0,"Karma":27000,"Engravings":0,"Cards":0,"Av. gold value":13650},"total":13650},{"range":"30 - 39","breakdown":{"Gold":45000,"Quality":5000,"Ability stones":0,"Bracelets":600,"Accessories":0,"Karma":36000,"Engravings":0,"Cards":0,"Av. gold value":18180},"total":18180},{"range":"40 - 49","breakdown":{"Gold":67500,"Quality":6750,"Ability stones":0,"Bracelets":900,"Accessories":0,"Karma":45000,"Engravings":0,"Cards":0,"Av. gold value":22770},"total":22770},{"range":"50 - 59","breakdown":{"Gold":90000,"Quality":9000,"Ability stones":0,"Bracelets":1250,"Accessories":0,"Karma":60000,"Engravings":0,"Cards":0,"Av. gold value":30375},"total":30375},{"range":"60 - 69","breakdown":{"Gold":135000,"Quality":13500,"Ability stones":0,"Bracelets":1750,"Accessories":0,"Karma":90000,"Engravings":0,"Cards":0,"Av. gold value":45525},"total":45525},{"range":"70 - 79","breakdown":{"Gold":180000,"Quality":18000,"Ability stones":0,"Bracelets":2500,"Accessories":0,"Karma":135000,"Engravings":0,"Cards":0,"Av. gold value":68250},"total":68250},{"range":"80 - 89","breakdown":{"Gold":250000,"Quality":25000,"Ability stones":0,"Bracelets":3500,"Accessories":0,"Karma":180000,"Engravings":0,"Cards":0,"Lv. 8 Gems":600000,"Av. gold value":309171.4286},"total":309171.4286},{"range":"90 - 99","breakdown":{"Gold":360000,"Quality":36000,"Ability stones":0,"Bracelets":4500,"Accessories":0,"Karma":270000,"Engravings":0,"Cards":0,"Lv. 8 Gems":900000,"Av. gold value":463628.5714},"total":463628.5714},{"range":"100","breakdown":{"Gold":540000,"Quality":62500,"Ability stones":0,"Bracelets":7500,"Accessories":0,"Karma":450000,"Engravings":0,"Cards":0,"Lv. 8 Gems":1200000,"Av. gold value":644142.8571},"total":644142.8571}],"ilvl":1680,"mode":"FlameFrost","label":"1680 FlameFrost Rewards","is_old":false},{"columns":["Gold","Quality","Ability stones","Bracelets","Accessories","Engravings","Cards","Lv. 8 Gems","_","Av. gold value"],"floors":[{"range":"0 - 9","rewards":{"Gold":16000.0,"Quality":35.0,"Ability stones":10.0,"Bracelets":20.0,"Accessories":10.0,"Engravings":2.0,"Cards":1.0}},{"range":"10 - 19","rewards":{"Gold":24000.0,"Quality":50.0,"Ability stones":20.0,"Bracelets":30.0,"Accessories":20.0,"Engravings":3.0,"Cards":1.8}},{"range":"20 - 29","rewards":{"Gold":32000.0,"Quality":75.0,"Ability stones":30.0,"Bracelets":40.0,"Accessories":30.0,"Engravings":4.0,"Cards":2.6}},{"range":"30 - 39","rewards":{"Gold":40000.0,"Quality":100.0,"Ability stones":40.0,"Bracelets":50.0,"Accessories":40.0,"Engravings":6.0,"Cards":3.6}},{"range":"40 - 49","rewards":{"Gold":60000.0,"Quality":135.0,"Ability stones":50.0,"Bracelets":75.0,"Accessories":60.0,"Engravings":8.0,"Cards":5}},{"range":"50 - 59","rewards":{"Gold":80000.0,"Quality":180.0,"Ability stones":75.0,"Bracelets":100.0,"Accessories":90.0,"Engravings":10.0,"Cards":7.4}},{"range":"60 - 69","rewards":{"Gold":120000.0,"Quality":270.0,"Ability stones":100.0,"Bracelets":125.0,"Accessories":120.0,"Engravings":15.0,"Cards":9.8}},{"range":"70 - 79","rewards":{"Gold":160000.0,"Quality":360.0,"Ability stones":125.0,"Bracelets":175.0,"Accessories":160.0,"Engravings":20.0,"Cards":13.4}},{"range":"80 - 89","rewards":{"Gold":220000.0,"Quality":500.0,"Ability stones":175.0,"Bracelets":250.0,"Accessories":240.0,"Engravings":25.0,"Cards":17.4,"Lv. 8 Gems":1.0}},{"range":"90 - 99","rewards":{"Gold":320000.0,"Quality":720.0,"Ability stones":250.0,"Bracelets":400.0,"Accessories":320.0,"Engravings":36.0,"Cards":25,"Lv. 8 Gems":2.0}},{"range":"100","rewards":{"Gold":480000.0,"Quality":1250.0,"Ability stones":400.0,"Bracelets":600.0,"Accessories":500.0,"Engravings":60.0,"Cards":37,"Lv. 8 Gems":3.0}}],"unit_gold_value":{"Gold":1,"Quality":50,"Ability stones":0,"Bracelets":10,"Accessories":0,"Engravings":0,"Cards":0,"Lv. 8 Gems":300000},"gold_value_per_floor":[{"range":"0 - 9","breakdown":{"Gold":16000,"Quality":1750,"Ability stones":0,"Bracelets":200,"Accessories":0,"Engravings":0,"Cards":0,"Av. gold value":60},"total":60},{"range":"10 - 19","breakdown":{"Gold":24000,"Quality":2500,"Ability stones":0,"Bracelets":300,"Accessories":0,"Engravings":0,"Cards":0,"Av. gold value":90},"total":90},{"range":"20 - 29","breakdown":{"Gold":32000,"Quality":3750,"Ability stones":0,"Bracelets":400,"Accessories":0,"Engravings":0,"Cards":0,"Av. gold value":120},"total":120},{"range":"30 - 39","breakdown":{"Gold":40000,"Quality":5000,"Ability stones":0,"Bracelets":500,"Accessories":0,"Engravings":0,"Cards":0,"Av. gold value":150},"total":150},{"range":"40 - 49","breakdown":{"Gold":60000,"Quality":6750,"Ability stones":0,"Bracelets":750,"Accessories":0,"Engravings":0,"Cards":0,"Av. gold value":225},"total":225},{"range":"50 - 59","breakdown":{"Gold":80000,"Quality":9000,"Ability stones":0,"Bracelets":1000,"Accessories":0,"Engravings":0,"Cards":0,"Av. gold value":300},"total":300},{"range":"60 - 69","breakdown":{"Gold":120000,"Quality":13500,"Ability stones":0,"Bracelets":1250,"Accessories":0,"Engravings":0,"Cards":0,"Av. gold value":375},"total":375},{"range":"70 - 79","breakdown":{"Gold":160000,"Quality":18000,"Ability stones":0,"Bracelets":1750,"Accessories":0,"Engravings":0,"Cards":0,"Av. gold value":525},"total":525},{"range":"80 - 89","breakdown":{"Gold":220000,"Quality":25000,"Ability stones":0,"Bracelets":2500,"Accessories":0,"Engravings":0,"Cards":0,"Lv. 8 Gems":300000,"Av. gold value":150750},"total":150750},{"range":"90 - 99","breakdown":{"Gold":320000,"Quality":36000,"Ability stones":0,"Bracelets":4000,"Accessories":0,"Engravings":0,"Cards":0,"Lv. 8 Gems":600000,"Av. gold value":301200},"total":301200},{"range":"100","breakdown":{"Gold":480000,"Quality":62500,"Ability stones":0,"Bracelets":6000,"Accessories":0,"Engravings":0,"Cards":0,"Lv. 8 Gems":900000,"Av. gold value":451800},"total":451800}],"ilvl":1640,"mode":"FlameFrost","label":"1640 FlameFrost Rewards","is_old":false}],"probabilities":{"Destiny_Bonus":[{"range":"0 - 9"},{"range":"10 - 19"},{"range":"20 - 29"},{"range":"30 - 39"},{"range":"40 - 49"},{"range":"50 - 59"},{"range":"60 - 69"},{"range":"70 - 79"},{"range":"80 - 89"},{"range":"90 - 99"},{"range":"100"}],"Destiny":[{"range":"0 - 9","Common":0.01049584,"Uncommon":0.00078863,"Rare":3.929e-05,"Epic":1.41e-06,"Legendary":1e-08,"Relic":0.0,"Ancient":0.0},{"range":"10 - 19","Common":0.10355858,"Uncommon":0.0212986,"Rare":0.00316994,"Epic":0.00036231,"Legendary":3.224e-05,"Relic":2.56e-06,"Ancient":7e-08},{"range":"20 - 29","Common":0.28630481,"Uncommon":0.1092658,"Rare":0.02879004,"Epic":0.00580402,"Legendary":0.0009413,"Relic":0.00012786,"Ancient":1.448e-05},{"range":"30 - 39","Common":0.34672797,"Uncommon":0.25137344,"Rare":0.10959334,"Epic":0.03424818,"Legendary":0.00837022,"Relic":0.00167863,"Ancient":0.00028347},{"range":"40 - 49","Common":0.19946819,"Uncommon":0.31001036,"Rare":0.22663631,"Epic":0.10766504,"Legendary":0.03800746,"Relic":0.01070152,"Ancient":0.00251158},{"range":"50 - 59","Common":0.04896024,"Uncommon":0.21320177,"Rare":0.28123776,"Epic":0.20691866,"Legendary":0.10485097,"Relic":0.04053477,"Ancient":0.01271141},{"range":"60 - 69","Common":0.00398314,"Uncommon":0.0784817,"Rare":0.21718925,"Epic":0.25988841,"Legendary":0.1919195,"Relic":0.10199352,"Ancient":0.04239974},{"range":"70 - 79","Common":0.00047664,"Uncommon":0.01384677,"Rare":0.10116215,"Epic":0.21542462,"Legendary":0.24118694,"Relic":0.17895102,"Ancient":0.09883251},{"range":"80 - 89","Common":2.39e-05,"Uncommon":0.00157645,"Rare":0.02728163,"Epic":0.11754952,"Legendary":0.21150966,"Relic":0.22539507,"Ancient":0.16788562},{"range":"90 - 99","Common":6.6e-07,"Uncommon":0.00014588,"Rare":0.00430022,"Epic":0.04129549,"Legendary":0.12936309,"Relic":0.20645631,"Ancient":0.2118315},{"range":"100","Common":3e-08,"Uncommon":1.06e-05,"Rare":0.00060007,"Epic":0.01084234,"Legendary":0.07381861,"Relic":0.23415874,"Ancient":0.46352962}],"Flame":[{"range":"0 - 9","Rare":0.27624338,"Epic":0.27635788,"Legendary":0.2762537},{"range":"10 - 19","Rare":0.35269268,"Epic":0.3525519,"Legendary":0.35252906},{"range":"20 - 29","Rare":0.14407885,"Epic":0.14357645,"Legendary":0.14361683},{"range":"30 - 39","Rare":0.1026962,"Epic":0.10069383,"Legendary":0.10038097},{"range":"40 - 49","Rare":0.05806624,"Epic":0.05421342,"Legendary":0.05321987},{"range":"50 - 59","Rare":0.03628568,"Epic":0.03312849,"Legendary":0.03134426},{"range":"60 - 69","Rare":0.02013507,"Epic":0.02089561,"Legendary":0.01940675},{"range":"70 - 79","Rare":0.00770886,"Epic":0.01144648,"Legendary":0.01154198},{"range":"80 - 89","Rare":0.00188525,"Epic":0.00523715,"Legendary":0.00687051},{"range":"90 - 99","Rare":0.00019073,"Epic":0.00156345,"Legendary":0.00327001},{"range":"100","Rare":1.706e-05,"Epic":0.00033534,"Legendary":0.00156606}],"Frost":[{"range":"0 - 9","Rare":0.22628932,"Epic":0.22626679,"Legendary":0.22630819},{"range":"10 - 19","Rare":0.34744045,"Epic":0.34729603,"Legendary":0.34726128},{"range":"20 - 29","Rare":0.19241227,"Epic":0.19169445,"Legendary":0.19159677},{"range":"30 - 39","Rare":0.10643132,"Epic":0.10380983,"Legendary":0.10332312},{"range":"40 - 49","Rare":0.05869151,"Epic":0.05409036,"Legendary":0.05275289},{"range":"50 - 59","Rare":0.03912306,"Epic":0.03621782,"Legendary":0.03417443},{"range":"60 - 69","Rare":0.01988261,"Epic":0.02133856,"Legendary":0.01983222},{"range":"70 - 79","Rare":0.00776596,"Epic":0.01217937,"Legendary":0.01264885},{"range":"80 - 89","Rare":0.00171927,"Epic":0.00518294,"Legendary":0.00709351},{"range":"90 - 99","Rare":0.00022968,"Epic":0.00160354,"Legendary":0.00336117},{"range":"100","Rare":1.455e-05,"Epic":0.00032031,"Legendary":0.00164757}]},"cube_rewards":[{"name":"Haal's Hourglass 1750","Lv. 2 Gems":18.0,"Leapstones":12.0,"Blue juice":12.0,"Red juice":12.0,"Silvers":210000.0,"Total gold value":18360.54321},{"name":"Haal's Hourglass 1730","Lv. 2 Gems":15.0,"Leapstones":10.0,"Blue juice":10.0,"Red juice":10.0,"Silvers":202000.0,"Total gold value":15300.45267},{"name":"Cube 1720","Lv. 2 Gems":22.0,"Leapstones":41.0,"Blue juice":8.0,"Red juice":8.0,"Silvers":175000.0,"Total gold value":17404.33059},{"name":"Cube 1700","Lv. 2 Gems":16.0,"Leapstones":32.0,"Blue juice":6.0,"Red juice":6.0,"Silvers":160000.0,"Total gold value":12795.14952},{"name":"Cube 1680","Lv. 2 Gems":12.0,"Leapstones":25.0,"Blue juice":5.0,"Red juice":5.0,"Silvers":150000.0,"Total gold value":9909.36214},{"name":"Cube 1640","Lv. 2 Gems":6.0,"Leapstones":14.0,"Blue juice":4.0,"Red juice":4.0,"Silvers":140000.0,"Total gold value":5874.18107},{"name":"Unit gold value","Lv. 2 Gems":548.696845,"Leapstones":107,"Blue juice":200,"Red juice":400,"Silvers":0},{"name":"Unit gold value","Lv. 2 Gems":548.696845,"Leapstones":13,"Blue juice":200,"Red juice":400,"Silvers":0}],"overview":{"avg_gold_per_chest":{"Destiny":{"1730.0":{"Common":39130.10334,"Uncommon":54217.63332,"Rare":76965.25322,"Epic":111880.0872,"Legendary":164188.7282,"Relic":232393.9126,"Ancient":302627.7279},"Old 1730":{"Common":27044.41222,"Uncommon":38427.10988,"Rare":55373.27342,"Epic":80424.8408,"Legendary":117504.2791,"Relic":165916.0077,"Ancient":215828.4754},"1700.0":{"Common":24020.78264,"Uncommon":34659.80184,"Rare":50079.10185,"Epic":72481.93939,"Legendary":105427.2685,"Relic":148289.0575,"Ancient":192387.9768},"1680.0":{"Common":22792.52374,"Uncommon":32540.48142,"Rare":47150.25538,"Epic":68908.58336,"Legendary":101179.9802,"Relic":143293.5395,"Ancient":186675.6139},"1640.0":{"Common":16815.82085,"Uncommon":23907.52264,"Rare":34744.72846,"Epic":51000.19807,"Legendary":75188.55931,"Relic":106831.6634,"Ancient":139497.524}},"Flame":{"1730.0":{"Rare":26929.00857,"Epic":29646.91837,"Legendary":32097.36519},"1700.0":{"Rare":24235.28956,"Epic":26593.33978,"Legendary":28717.53365},"1680.0":{"Rare":13281.97961,"Epic":15221.98165,"Legendary":17166.87841},"1640.0":{"Rare":465.9162683,"Epic":1528.544329,"Legendary":2843.511125}},"Frost":{"1730.0":{"Rare":27754.68523,"Epic":30620.53205,"Legendary":33311.65438},"1700.0":{"Rare":24944.08835,"Epic":27440.89932,"Legendary":29775.62871},"1680.0":{"Rare":13715.46662,"Epic":15735.81954,"Legendary":17857.04294},"1640.0":{"Rare":455.3100441,"Epic":1529.869776,"Legendary":2945.624708}}},"cube_avg_gold":[{"name":"Haal's H (1730)","avg_gold":15300.45267},{"name":"4th U. (1720)","avg_gold":17404.33059},{"name":"3rd U. (1700)","avg_gold":12795.14952},{"name":"2nd U. (1680)","avg_gold":9909.36214},{"name":"1st U. (1640)","avg_gold":5874.18107}],"cube_ticket_exchange_vs_destiny":[{"cube_name":"Haal's H (1730)","vs_Rare":{"value":3940.860629,"gain_pct":0.2575649697},"vs_Epic":{"value":3346.228527,"gain_pct":0.2187012763},"vs_Legendary":{"value":1118.420144,"gain_pct":0.07309719311}},{"cube_name":"4th U. (1720)","vs_Rare":{"value":21078.29602,"gain_pct":1.2110949},"vs_Epic":{"value":19889.03181,"gain_pct":1.142763389},"vs_Legendary":{"value":15433.41505,"gain_pct":0.8867571762}},{"cube_name":"3rd U. (1700)","vs_Rare":{"value":12244.4014,"gain_pct":0.9569564924},"vs_Epic":{"value":11365.49694,"gain_pct":0.8882660516},"vs_Legendary":{"value":8290.304186,"gain_pct":0.6479255419}},{"cube_name":"2nd U. (1680)","vs_Rare":{"value":13665.76555,"gain_pct":1.379076207},"vs_Epic":{"value":13060.16565,"gain_pct":1.317962293},"vs_Legendary":{"value":10326.63389,"gain_pct":1.042108841}},{"cube_name":"1st U. (1640)","vs_Rare":{"value":11498.18316,"gain_pct":1.957410407},"vs_Epic":{"value":11125.88495,"gain_pct":1.894031665},"vs_Legendary":{"value":9163.530792,"gain_pct":1.55996737}}],"transmutation_destiny_to_flame":[{"destiny_tier":"1730.0","vs_Rare":{"value":-10616.03165,"gain_pct":-0.137932784},"vs_Epic":{"value":-20661.76804,"gain_pct":-0.184677797},"vs_Legendary":{"value":-42526.87714,"gain_pct":-0.25901216}},{"destiny_tier":"Old 1730","vs_Rare":{"value":-4926.43837,"gain_pct":-0.08896780099},"vs_Epic":{"value":-11788.25021,"gain_pct":-0.146574741},"vs_Legendary":{"value":-26791.08554,"gain_pct":-0.2280009354}},{"destiny_tier":"1700.0","vs_Rare":{"value":-4754.757406,"gain_pct":-0.09494494171},"vs_Epic":{"value":-10906.80711,"gain_pct":-0.1504762042},"vs_Legendary":{"value":-24242.92473,"gain_pct":-0.2299492822}},{"destiny_tier":"1680.0","vs_Rare":{"value":-7937.530837,"gain_pct":-0.1683454474},"vs_Epic":{"value":-14092.38465,"gain_pct":-0.2045084076},"vs_Legendary":{"value":-27270.99707,"gain_pct":-0.2695295752}},{"destiny_tier":"1640.0","vs_Rare":{"value":-9523.668063,"gain_pct":-0.2741039716},"vs_Epic":{"value":-14287.64418,"gain_pct":-0.2801487979},"vs_Legendary":{"value":-24219.61506,"gain_pct":-0.3221183553}}],"unit_gold_value_general":{"Gold":1.0,"Silver":0.0,"Quality blue":20.0,"Quality red":30.0,"Ability stones":0.0,"Bracelet":10.0,"Accessory":0.0,"Karma":600.0,"Green":0.0,"Blue":500.0,"Purple":5000.0,"Elysian ticket":0.0,"Legendary card":0.0,"Relic engravings":0,"Bound (Hell)":300000.0,"Tradeable (cube)":400000.0},"unit_gold_value_T4_5":{"Free tap":1000.0,"Blue stone":1.15,"Red stone":26.5,"Leapstone":107.0,"Fusion":241.0},"unit_gold_value_T4_5_juice":{"1000 Shards":0.0,"Blue juice":200.0,"Red juice":400.0},"unit_gold_value_T4":{"Free tap":100.0,"Blue stone":0.1,"Red stone":5.0,"Leapstone":13.0,"Fusion":160.0},"sections":{"How to use":["File > Make a copy    \u2192    you will be able to change the gold values of any item. (yellow cells only)","For engravings, enter the prices of all the engravings that you need in the line \"Relic engravings\". (one cell for each engraving, the order doesn't matter)","The average gold value of each key is displayed in \"Average gold value per content\".","\"Average gold gained\" is the average amount of gold that you will gain by trading Cube tickets for Hell keys, and by upgrading a key with the altar.","Everything you need is in this page \"Overview\". In the other pages, you can see the detailed rewards for each chest and their gold value.","You can find the original link below, to keep the doc updated."],"Notes":["The best strategy in Flame and Frost keys is to leave as soon as you don't have any resurrection left. Don't greed, it's not worth it.","The best keys to transmute in the altars are the blue keys.","If you're full engravings, maybe you shouldn't transmute your keys.","For some items, it can be difficult to give a specific value. (bracelets, quality taps,...) You can try different values and see if it makes a difference."],"Simulation approximations":["\"Chest +1\" from bonus rooms are ignored in the simulation. (they barely make a difference)","The small amount of base honing materials given in each chests is taken into account.","The 10% probability of getting an abundant chest, and the \"Wealth +1\" bonus, were approximated. (they barely make a difference)","The result takes into account that the game lets you pick a chest among 3, and that you will always choose the one with the highest gold value."],"Resources":["Sekwah for the datamining","Ksfreaks' Cube rewards tables","My own program that simulated 100 million attempts for each type of key"],"Author":[]},"wealth_multiplier_note":"The 10% probability of getting an abundant chest, and the \"Wealth +1\" bonus, were approximated. (they barely make a difference)","author":"Arkemys"},"wealth_multiplier":{"tabulated_in_source_sheet":false,"in_game_name":"Wealth +1","internal_name":"plenty_age","ui_announce_text":"One reward chest will be upgraded to an Abundant Reward Chest.","what_it_affects":"Replaces the SubDrop chest (the guaranteed 'Additional Rewards' chest given alongside the player's main pick) with an Abundant variant. Main reward chests the player picks are NOT affected. Each Hell Key tier \u00d7 floor bracket has its own SubDropId (regular) and PlentyDropId (abundant) entry.","trigger_paths":{"natural":{"source":"TrinityInfernoReward.PlentyPropRatio","value":"10 (universal across all 187 reward rows in the DB)","meaning":"10% per-chest probability that the SubDrop chest natively rolls abundant."},"altar":{"source":"TrinityInfernoLucky 'plenty_age' (SecondaryKey=2)","weight":"20 (out of 100 total altar effect weights for tier 1001)","max_stack":2,"meaning":"When a Wealth+1 altar effect is picked, it deterministically converts 1 chest to abundant for that run. Stackable up to 2 (so 2 chests can be guaranteed abundant if the player picks Wealth+1 twice across the 9 altar floors at 11/22/33/44/55/66/77/88/99)."}},"altar_effect_table":[{"sk":0,"internal":"bungee","label":"Descent +1","weight":20,"max_stack":1,"effect":"Number of Descents +1."},{"sk":1,"internal":"extension_box","label":"Chest +1","weight":40,"max_stack":1,"effect":"1 extra reward chest appears on completion."},{"sk":2,"internal":"plenty_age","label":"Wealth +1","weight":20,"max_stack":2,"effect":"One reward chest will be upgraded to an Abundant Reward Chest."},{"sk":3,"internal":"rocket_jump","label":"Rocket Jump","weight":20,"max_stack":0,"effect":"Your next descent will move you at least 16 floors, but not beyond 100 floors."},{"sk":4,"internal":"extension_life","label":"Life +1","weight":0,"max_stack":0,"effect":"Resurrection Count +1.  (currently disabled, weight=0)"}],"magnitude":{"mechanism":"DropBase.Repetition column","regular_repetition":1,"abundant_repetition":10,"effective_multiplier":"Roughly 10x per-chest, but item-by-item the ratio ranges from 5x to 10x because the per-row base counts were retuned. Confirmed example (1580 Base SubDrop): Honor Shard 2800 -> 28000 (10x), Obliteration Stone 60 -> 600 (10x), Protection Stone 200 -> 1000 (5x)."},"cross_reference":{"sekwahar_dataset":"https://raw.githubusercontent.com/sekwahar/loa_datamining/main/data/TrinityInfernoRewards.json","sekwahar_field":"Plenty[] (parallel to Sub[]) \u2014 explicit per-tier abundant chest contents","in_game_db_tables":["TrinityInferno","TrinityInfernoReward","TrinityInfernoLucky","DropBase","DropEntity"]},"implications_for_calculator":"Expected value of one run = E[player's main picks] + E[SubDrop] * (0.9 + 0.1*10) = E[main] + 1.9 * E[SubDrop_base]. With one Wealth+1 altar pick: E[main] + 10 * E[SubDrop_base]. The 'Plenty' rows in sekwahar's TrinityInfernoRewards.json or the in-game DropBase rows for PlentyDropId give the exact post-multiplier values directly \u2014 no need to multiply yourself.","note_from_arkemys":"The 10% probability of getting an abundant chest, and the 'Wealth +1' bonus, were approximated. (they barely make a difference) \u2014 Arkemys, source spreadsheet Notes."},"cube_to_hellkey_exchanges":[{"shop_secondary_key":300,"from_item_id":62203409,"from_item_name":"Entrance Ticket: Ebony Cube [4th Unlock]","from_count":5,"from_cube_label":"4th Unlock","from_cube_ilvl":1720,"to_item_id":659000091,"to_item_name":"Hell Key of Destiny V","to_hell_key_tier_roman":"V","to_hell_key_tier_int":5,"to_hell_key_rarity":"Legendary","to_hell_key_ilvl":1730,"analysis":{"cube_value_per_ticket":17404.33,"total_cube_value":87021.65,"hell_key_value":164188.73,"net_gold_gain":77167.08,"gain_pct":88.7}},{"shop_secondary_key":301,"from_item_id":62203409,"from_item_name":"Entrance Ticket: Ebony Cube [4th Unlock]","from_count":3,"from_cube_label":"4th Unlock","from_cube_ilvl":1720,"to_item_id":659000090,"to_item_name":"Hell Key of Destiny V","to_hell_key_tier_roman":"V","to_hell_key_tier_int":5,"to_hell_key_rarity":"Epic","to_hell_key_ilvl":1730,"analysis":{"cube_value_per_ticket":17404.33,"total_cube_value":52212.99,"hell_key_value":111880.09,"net_gold_gain":59667.1,"gain_pct":114.3}},{"shop_secondary_key":302,"from_item_id":62203409,"from_item_name":"Entrance Ticket: Ebony Cube [4th Unlock]","from_count":2,"from_cube_label":"4th Unlock","from_cube_ilvl":1720,"to_item_id":659000089,"to_item_name":"Hell Key of Destiny V","to_hell_key_tier_roman":"V","to_hell_key_tier_int":5,"to_hell_key_rarity":"Rare","to_hell_key_ilvl":1730,"analysis":{"cube_value_per_ticket":17404.33,"total_cube_value":34808.66,"hell_key_value":76965.25,"net_gold_gain":42156.59,"gain_pct":121.1}},{"shop_secondary_key":303,"from_item_id":62203409,"from_item_name":"Entrance Ticket: Ebony Cube [4th Unlock]","from_count":4,"from_cube_label":"4th Unlock","from_cube_ilvl":1720,"to_item_id":659000072,"to_item_name":"Hell Key of Destiny IV","to_hell_key_tier_roman":"IV","to_hell_key_tier_int":4,"to_hell_key_rarity":"Legendary","to_hell_key_ilvl":1700,"analysis":{"cube_value_per_ticket":17404.33,"total_cube_value":69617.32,"hell_key_value":105427.27,"net_gold_gain":35809.95,"gain_pct":51.4}},{"shop_secondary_key":304,"from_item_id":62203408,"from_item_name":"Entrance Ticket: Ebony Cube [3rd Unlock]","from_count":5,"from_cube_label":"3rd Unlock","from_cube_ilvl":1700,"to_item_id":659000072,"to_item_name":"Hell Key of Destiny IV","to_hell_key_tier_roman":"IV","to_hell_key_tier_int":4,"to_hell_key_rarity":"Legendary","to_hell_key_ilvl":1700,"analysis":{"cube_value_per_ticket":12795.15,"total_cube_value":63975.75,"hell_key_value":105427.27,"net_gold_gain":41451.52,"gain_pct":64.8}},{"shop_secondary_key":305,"from_item_id":62203408,"from_item_name":"Entrance Ticket: Ebony Cube [3rd Unlock]","from_count":3,"from_cube_label":"3rd Unlock","from_cube_ilvl":1700,"to_item_id":659000071,"to_item_name":"Hell Key of Destiny IV","to_hell_key_tier_roman":"IV","to_hell_key_tier_int":4,"to_hell_key_rarity":"Epic","to_hell_key_ilvl":1700,"analysis":{"cube_value_per_ticket":12795.15,"total_cube_value":38385.45,"hell_key_value":72481.94,"net_gold_gain":34096.49,"gain_pct":88.8}},{"shop_secondary_key":306,"from_item_id":62203408,"from_item_name":"Entrance Ticket: Ebony Cube [3rd Unlock]","from_count":2,"from_cube_label":"3rd Unlock","from_cube_ilvl":1700,"to_item_id":659000070,"to_item_name":"Hell Key of Destiny IV","to_hell_key_tier_roman":"IV","to_hell_key_tier_int":4,"to_hell_key_rarity":"Rare","to_hell_key_ilvl":1700,"analysis":{"cube_value_per_ticket":12795.15,"total_cube_value":25590.3,"hell_key_value":50079.1,"net_gold_gain":24488.8,"gain_pct":95.7}},{"shop_secondary_key":307,"from_item_id":62203407,"from_item_name":"Entrance Ticket: Ebony Cube [2nd Unlock]","from_count":5,"from_cube_label":"2nd Unlock","from_cube_ilvl":1680,"to_item_id":659000044,"to_item_name":"Hell Key of Destiny III","to_hell_key_tier_roman":"III","to_hell_key_tier_int":3,"to_hell_key_rarity":"Legendary","to_hell_key_ilvl":1680,"analysis":{"cube_value_per_ticket":9909.36,"total_cube_value":49546.81,"hell_key_value":101179.98,"net_gold_gain":51633.17,"gain_pct":104.2}},{"shop_secondary_key":308,"from_item_id":62203407,"from_item_name":"Entrance Ticket: Ebony Cube [2nd Unlock]","from_count":3,"from_cube_label":"2nd Unlock","from_cube_ilvl":1680,"to_item_id":659000043,"to_item_name":"Hell Key of Destiny III","to_hell_key_tier_roman":"III","to_hell_key_tier_int":3,"to_hell_key_rarity":"Epic","to_hell_key_ilvl":1680,"analysis":{"cube_value_per_ticket":9909.36,"total_cube_value":29728.09,"hell_key_value":68908.58,"net_gold_gain":39180.5,"gain_pct":131.8}},{"shop_secondary_key":309,"from_item_id":62203407,"from_item_name":"Entrance Ticket: Ebony Cube [2nd Unlock]","from_count":2,"from_cube_label":"2nd Unlock","from_cube_ilvl":1680,"to_item_id":659000042,"to_item_name":"Hell Key of Destiny III","to_hell_key_tier_roman":"III","to_hell_key_tier_int":3,"to_hell_key_rarity":"Rare","to_hell_key_ilvl":1680,"analysis":{"cube_value_per_ticket":9909.36,"total_cube_value":19818.72,"hell_key_value":47150.26,"net_gold_gain":27331.53,"gain_pct":137.9}},{"shop_secondary_key":310,"from_item_id":62203406,"from_item_name":"Entrance Ticket: Ebony Cube [1st Unlock]","from_count":5,"from_cube_label":"1st Unlock","from_cube_ilvl":1640,"to_item_id":659000025,"to_item_name":"Hell Key of Destiny II","to_hell_key_tier_roman":"II","to_hell_key_tier_int":2,"to_hell_key_rarity":"Legendary","to_hell_key_ilvl":1640,"analysis":{"cube_value_per_ticket":5874.18,"total_cube_value":29370.91,"hell_key_value":75188.56,"net_gold_gain":45817.65,"gain_pct":156.0}},{"shop_secondary_key":311,"from_item_id":62203406,"from_item_name":"Entrance Ticket: Ebony Cube [1st Unlock]","from_count":3,"from_cube_label":"1st Unlock","from_cube_ilvl":1640,"to_item_id":659000024,"to_item_name":"Hell Key of Destiny II","to_hell_key_tier_roman":"II","to_hell_key_tier_int":2,"to_hell_key_rarity":"Epic","to_hell_key_ilvl":1640,"analysis":{"cube_value_per_ticket":5874.18,"total_cube_value":17622.54,"hell_key_value":51000.2,"net_gold_gain":33377.65,"gain_pct":189.4}},{"shop_secondary_key":312,"from_item_id":62203406,"from_item_name":"Entrance Ticket: Ebony Cube [1st Unlock]","from_count":2,"from_cube_label":"1st Unlock","from_cube_ilvl":1640,"to_item_id":659000023,"to_item_name":"Hell Key of Destiny II","to_hell_key_tier_roman":"II","to_hell_key_tier_int":2,"to_hell_key_rarity":"Rare","to_hell_key_ilvl":1640,"analysis":{"cube_value_per_ticket":5874.18,"total_cube_value":11748.36,"hell_key_value":34744.73,"net_gold_gain":22996.37,"gain_pct":195.7}}],"sand_of_trial":{"item_id":62203410,"item_name_in_game":"Sand of Trial","moneytype_index":105,"moneytype_internal":"hourglass_bonus","description":"Recovers Haal's Hourglass Reward Enhancement Meter by 1 bar. Used immediately upon acquisition. Discarded if at 5 bars.","source":"Daily Chaos Rift (1730 Kurzan Front replacement).","max_carryable":5,"is_directly_tradeable":false,"consumption":"All accumulated Sand of Trial is consumed when entering Haal's Hourglass; the meter level (0-5 bars) determines the magnitude of bonus rewards.","note":"Distinct from 'Sand of Time' (player slang for Entrance Ticket Fragments, items 41612300/01/02). Sand of Trial is the meter currency for boosting a Haal's Hourglass run; Sand of Time/Fragments are the tradeable currency that can be exchanged into Cube tickets and ultimately into Hell Keys."},"fragment_to_cube_exchanges":[{"shop_secondary_key":1,"from_item_id":41612300,"from_item_name":"Entrance Ticket Fragment: Ebony Cube [1st Unlock]","from_count":2,"to_item_id":62203406,"to_item_name":"Entrance Ticket: Ebony Cube [1st Unlock]","to_count":1},{"shop_secondary_key":2,"from_item_id":41612301,"from_item_name":"Entrance Ticket Fragment: Ebony Cube [2nd Unlock]","from_count":2,"to_item_id":62203407,"to_item_name":"Entrance Ticket: Ebony Cube [2nd Unlock]","to_count":1},{"shop_secondary_key":3,"from_item_id":41612302,"from_item_name":"Entrance Ticket Fragment: Ebony Cube [3rd Unlock]","from_count":2,"to_item_id":62203408,"to_item_name":"Entrance Ticket: Ebony Cube [3rd Unlock]","to_count":1},{"shop_secondary_key":4,"from_item_id":62203499,"from_item_name":"Entrance Ticket Exchange Certificate","from_count":75,"to_item_id":62203401,"to_item_name":"Entrance Ticket: Ebony Cube [1st Forbiddance]","to_count":1},{"shop_secondary_key":5,"from_item_id":62203499,"from_item_name":"Entrance Ticket Exchange Certificate","from_count":100,"to_item_id":62203402,"to_item_name":"Entrance Ticket: Ebony Cube [2nd Forbiddance]","to_count":1},{"shop_secondary_key":6,"from_item_id":62203499,"from_item_name":"Entrance Ticket Exchange Certificate","from_count":125,"to_item_id":62203403,"to_item_name":"Entrance Ticket: Ebony Cube [3rd Forbiddance]","to_count":1},{"shop_secondary_key":8,"from_item_id":62203499,"from_item_name":"Entrance Ticket Exchange Certificate","from_count":1,"to_item_id":403001,"to_item_name":"Ancient Gold Coin","to_count":3},{"shop_secondary_key":9,"from_item_id":41612300,"from_item_name":"Entrance Ticket Fragment: Ebony Cube [1st Unlock]","from_count":1,"to_item_id":40100122,"to_item_name":"Regulus's Light Currency Chest","to_count":1},{"shop_secondary_key":10,"from_item_id":41612301,"from_item_name":"Entrance Ticket Fragment: Ebony Cube [2nd Unlock]","from_count":1,"to_item_id":40100122,"to_item_name":"Regulus's Light Currency Chest","to_count":1},{"shop_secondary_key":11,"from_item_id":41612302,"from_item_name":"Entrance Ticket Fragment: Ebony Cube [3rd Unlock]","from_count":1,"to_item_id":40100122,"to_item_name":"Regulus's Light Currency Chest","to_count":1},{"shop_secondary_key":12,"from_item_id":62203206,"from_item_name":"Entrance Ticket: Dimensional Cube [Hard] (Bound)","from_count":1,"to_item_id":62203499,"to_item_name":"Entrance Ticket Exchange Certificate","to_count":20},{"shop_secondary_key":13,"from_item_id":62203205,"from_item_name":"Entrance Ticket: Dimensional Cube [Normal] (Bound)","from_count":1,"to_item_id":62203499,"to_item_name":"Entrance Ticket Exchange Certificate","to_count":15},{"shop_secondary_key":14,"from_item_id":62203203,"from_item_name":"Entrance Ticket: Elite Cube (Bound)","from_count":1,"to_item_id":403001,"to_item_name":"Ancient Gold Coin","to_count":40},{"shop_secondary_key":15,"from_item_id":62203201,"from_item_name":"Entrance Ticket: Cube (Bound)","from_count":1,"to_item_id":403001,"to_item_name":"Ancient Gold Coin","to_count":30},{"shop_secondary_key":16,"from_item_id":62203008,"from_item_name":"Ticket: Hall of Eternity (Bound)","from_count":1,"to_item_id":62203499,"to_item_name":"Entrance Ticket Exchange Certificate","to_count":90},{"shop_secondary_key":17,"from_item_id":62203007,"from_item_name":"Entrance Ticket: Hall of the Sun [Inferno] (Bound)","from_count":1,"to_item_id":62203499,"to_item_name":"Entrance Ticket Exchange Certificate","to_count":75},{"shop_secondary_key":18,"from_item_id":62203006,"from_item_name":"Entrance Ticket: Hall of the Sun [Hard] (Bound)","from_count":1,"to_item_id":62203499,"to_item_name":"Entrance Ticket Exchange Certificate","to_count":60},{"shop_secondary_key":19,"from_item_id":62203005,"from_item_name":"Entrance Ticket: Hall of the Sun [Normal] (Bound)","from_count":1,"to_item_id":62203499,"to_item_name":"Entrance Ticket Exchange Certificate","to_count":45},{"shop_secondary_key":20,"from_item_id":62203003,"from_item_name":"Entrance Ticket: Hall of Silence (Bound)","from_count":1,"to_item_id":403001,"to_item_name":"Ancient Gold Coin","to_count":50}],"sand_to_bluehellkey_chain":{"description":"Player's '4 Sand of Time -> 1 Blue Hell Key' chain. 'Sand of Time' = colloquial for Entrance Ticket Fragments. In the live game (April 2026), fragments are only valid for the 4th Unlock (1720 cube) tier, which converts to a 1730 Hell Key V Rare. 1st/2nd/3rd Unlock fragments exist in older client data but are not part of the active live exchange path.","chain_steps":["2x Entrance Ticket Fragment (4th Unlock) -> 1x Ebony Cube Entrance Ticket [4th Unlock] (1720 cube)","2x Ebony Cube Entrance Ticket [4th Unlock] -> 1x Hell Key of Destiny V Rare/blue (1730) - DirectShop pk=4/sk=302","Net: 4 fragments -> 1 Blue Hell Key (1730)"],"rows_by_tier":[{"tier_label":"4th Unlock (1720) -> 1730 Blue HK","ilvl_run":1730,"fragments_needed":4,"cube_tickets_needed":2,"cube_value_per_ticket":17404.33,"two_cube_runs_value":34808.66,"hell_key_target":"Hell Key of Destiny V Rare (1730)","hell_key_avg_gold":76965.25,"net_gold_gain":42156.59,"gain_pct":121.1,"value_per_fragment":19241.31}],"note":"Per live game state. The decrypted client DB still contains 1st/2nd/3rd Unlock fragment shop entries (Shop pk=263200/sk=1-3) - those are stale or unused in the current live game per player guidance.","stale_lower_tiers_seen_in_db":["1st Unlock (1640) - Shop pk=263200/sk=1","2nd Unlock (1680) - Shop pk=263200/sk=2","3rd Unlock (1700) - Shop pk=263200/sk=3"]}};</script>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel">
+
+const { useState, useMemo, useEffect, useRef } = React;
+const D = __DATA__;
+
+const fmtGold = n => {
+  if (n == null || isNaN(n)) return "—";
+  return Math.round(n).toLocaleString() + "g";
+};
+const fmt = n => {
+  if (n == null) return "—";
+  if (typeof n === "string") return n;
+  if (Math.abs(n) >= 1000) return Math.round(n).toLocaleString();
+  return n;
+};
+
+// Columns we should not treat as picked-chest reward rows. They're either
+// secondary helper columns or sub-drop breakdown columns the spreadsheet
+// includes for the gold-value computation.
+const COL_BLACKLIST = new Set([
+  "_", "Av. gold value (Destiny)", "Av. gold value (Flame)", "Av. gold value (Frost)",
+  "Av. gold value", "Base shards", "Base red stones", "Base blue stones", "Base leapstones",
+]);
+
+function isPickableColumn(col) {
+  return !COL_BLACKLIST.has(col);
+}
+
+// Astrogem chest defaults. The composite "g|b|p" string in the spreadsheet maps to
+// chest grades, not literal colors:
+//   green  = chests that drop a minimum of Uncommon (worthless — no chance of Rare or better)
+//   blue   = chests that *can* drop Rare astrogems (~100g per gem expected value)
+//   purple = chests that drop ONLY Epic astrogems (~15,000g each)
+// Random vs Selectable are valued the same — the grade is what matters.
+const ASTRO_DEFAULTS = { uncommon: 0, rare: 100, epic: 15000 };
+
+function valueAstrogem(str, prices) {
+  if (typeof str !== "string") return 0;
+  const parts = str.split("|").map(x => parseFloat(x) || 0);
+  const [green=0, blue=0, purple=0] = parts;
+  const p = prices || ASTRO_DEFAULTS;
+  return green * (p.uncommon ?? 0)
+       + blue  * (p.rare ?? 0)
+       + purple* (p.epic ?? 0);
+}
+
+function astrogemTotalCount(str) {
+  if (typeof str !== "string") return 0;
+  return str.split("|").map(x => parseFloat(x) || 0).reduce((a,b) => a+b, 0);
+}
+
+// Compute the avg per-floor count for each pickable chest column at a tier.
+// Returns a sorted list of { col, avgCount, avgGold } descending by gold.
+function getAvgChestPicks(tierLabel, astroPrices) {
+  const tier = D.key_tiers.find(t => t.label === tierLabel);
+  if (!tier) return [];
+  const BLOCK = new Set([
+    "_", "Av. gold value (Destiny)", "Av. gold value (Flame)", "Av. gold value (Frost)", "Av. gold value",
+    "Base shards", "Base red stones", "Base blue stones", "Base leapstones",
+  ]);
+  const aPrices = astroPrices || ASTRO_DEFAULTS;
+  const rows = [];
+  for (const col of tier.columns) {
+    if (BLOCK.has(col)) continue;
+    let sum = 0, gold = 0, n = 0;
+    for (const f of tier.floors) {
+      const v = f.rewards[col];
+      if (v == null || v === "") continue;
+      let cnt, valGold;
+      if (typeof v === "string") {
+        if (!v.includes("|")) continue;
+        cnt = astrogemTotalCount(v);
+        valGold = valueAstrogem(v, aPrices);
+      } else {
+        cnt = v;
+        valGold = v * ((tier.unit_gold_value || {})[col] ?? 0);
+      }
+      sum += cnt;
+      gold += valGold;
+      n++;
+    }
+    if (n === 0 || sum === 0) continue;
+    rows.push({ col, avgCount: sum / n, avgGold: gold / n });
+  }
+  rows.sort((a, b) => b.avgGold - a.avgGold);
+  return rows;
+}
+
+function fmtCompact(n) {
+  if (n == null || isNaN(n)) return "—";
+  const x = Math.round(n);
+  if (x >= 1_000_000) return (x/1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (x >= 10_000) return (x/1000).toFixed(0) + "k";
+  if (x >= 1000) return (x/1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return x.toLocaleString();
+}
+
+function SandFragmentTab({setupState}) {
+  const { effPrice, astroPrices, priceOverrides, silverPrice } = setupState;
+  const [mult, setMult] = useState(4);
+
+  const cube1720 = (D.cube_rewards || []).find(c => c.name === "Cube 1720") || {};
+  const haal1730 = (D.cube_rewards || []).find(c => c.name === "Haal's Hourglass 1730") || {};
+
+  // Per-mat unit prices come from the user's overridable PRICE_MATS values.
+  // T4.5 leapstones (Haal's), T4 leapstones (Cube 1720), and shared juice/gem prices.
+  const matUnit = (key) => {
+    if (priceOverrides[key] !== undefined) return priceOverrides[key];
+    return (PRICE_MATS.find(m => m.key === key) || {}).defaultPrice || 0;
+  };
+  const haalUnits = {
+    "Lv. 2 Gems": matUnit("Lv. 2 Gems"),
+    "Leapstones": matUnit("Leapstones"),
+    "Blue juice": matUnit("Blue juice (T4.5)"),
+    "Red juice":  matUnit("Red juice (T4.5)"),
+    "Silvers":    silverPrice,
+  };
+  const cubeUnits = {
+    "Lv. 2 Gems": matUnit("Lv. 2 Gems"),
+    "Leapstones": matUnit("T4 Leapstones"),
+    "Blue juice": matUnit("Blue juice (T4.5)"),
+    "Red juice":  matUnit("Red juice (T4.5)"),
+    "Silvers":    silverPrice,
+  };
+
+  // Recompute per-run gold values from the user's prices so the journey reacts
+  // to overrides instead of using stale numbers from the JSON.
+  const fields = ["Lv. 2 Gems", "Leapstones", "Blue juice", "Red juice", "Silvers"];
+  const perSand = fields.reduce((s, f) => s + (haal1730[f] || 0) * (haalUnits[f] || 0), 0);
+  const cubeValuePerTicket = fields.reduce((s, f) => s + (cube1720[f] || 0) * (cubeUnits[f] || 0), 0);
+
+  // BHK 1730 (Rare/Blue) avg run value — floor-probability weighted, with user prices.
+  // probabilities.Destiny[i].Rare = P(reach floor i | got a Rare) and sums to ~1.
+  const bhkPicks = useMemo(
+    () => getWeightedChestPicks("1730 Destiny Rewards", "Rare", effPrice, astroPrices),
+    [effPrice, astroPrices, priceOverrides, setupState.past25]
+  );
+  // Player picks the best chest each run, so the run avg = floor-weighted best-pick gold.
+  const blueHKAvg = useMemo(
+    () => getWeightedBestPickGold("1730 Destiny Rewards", "Rare", effPrice, astroPrices),
+    [effPrice, astroPrices, priceOverrides, setupState.past25]
+  );
+
+  const fragmentsQty = mult;
+  const cubeQty = mult / 2;
+  const bhkQty = mult / 4;
+
+  const stage0Value = perSand * fragmentsQty;
+  const stage1Value = cubeValuePerTicket * cubeQty;
+  const stage2Value = blueHKAvg * bhkQty;
+
+  const step1Delta = stage1Value - stage0Value;          // 2 sands -> 1 cube ticket (LOSS)
+  const step2Delta = stage2Value - stage1Value;          // 2 cube tickets -> 1 Blue HK (GAIN)
+  const step1Pct = stage0Value > 0 ? (step1Delta / stage0Value) * 100 : 0;
+  const step2Pct = stage1Value > 0 ? (step2Delta / stage1Value) * 100 : 0;
+  const netDelta = stage2Value - stage0Value;
+
+  const fmtQty = (n) => n % 1 === 0 ? n.toString() : n.toFixed(2);
+  const sign = (n) => n >= 0 ? "+" : "";
+
+  return (
+    <div className="panel" style={{maxWidth:760, margin:"0 auto"}}>
+      <h2>Sand of Trial — Value Journey</h2>
+      <div className="notes" style={{marginBottom:12}}>
+        Sand of Trial has <b>two</b> redemption paths:
+        <div style={{marginTop:6}}>1. <b>Direct</b>: dump sands into Haal's Hourglass. Each sand is worth one base Haal's Hourglass 1730 run (~<b className="gold-val">{fmtGold(perSand)}</b>) — rewards scale linearly per sand.</div>
+        <div>2. <b>Convert</b> down the chain: <b>2 sands → 1 cube ticket → ½ of a Blue Hell Key (1730)</b>. The full <b>4 sands → 1 Blue HK</b> path averages ~<b className="gold-val">{fmtGold(blueHKAvg / 4)}</b> per sand.</div>
+        The journey below shows what each step gains or loses against the direct Haal's baseline.
+      </div>
+
+      <div className="mult-row">
+        <span className="notes" style={{marginRight:4}}>Starting sands:</span>
+        <button className={`mult-btn ${mult === 1 ? "on" : ""}`} onClick={() => setMult(1)}>1×</button>
+        <button className={`mult-btn ${mult === 2 ? "on" : ""}`} onClick={() => setMult(2)}>2×</button>
+        <button className={`mult-btn ${mult === 4 ? "on" : ""}`} onClick={() => setMult(4)}>4× (full chain)</button>
+      </div>
+
+      <div className="journey">
+        {/* Stage 0: starting fragments */}
+        <div className="j-stage" style={{display:"block"}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:12}}>
+            <div className="name">
+              Start: {fragmentsQty} Sand of Trial
+              <span className="sub">Direct Haal's Hourglass redemption: {fmtGold(perSand)} per sand (1× base run, scales linearly)</span>
+            </div>
+            <div className="qty-side">
+              <div className="qty">{fmtGold(stage0Value)}</div>
+              <div className="qty-sub">{fmtQty(fragmentsQty)} × {fmtGold(perSand)}</div>
+            </div>
+          </div>
+          <div className="mat-block">
+            <div className="mat-title">Mats if you dump all sands into Haal's Hourglass 1730 (rewards scale linearly per sand)</div>
+            <div className="mat-list">
+              {fields.map(f => {
+                const count = (haal1730[f] || 0) * fragmentsQty;
+                const gold = count * (haalUnits[f] || 0);
+                const iconKey = f === "Leapstones" ? "Leapstones"
+                              : f === "Blue juice" ? "Blue juice (T4.5)"
+                              : f === "Red juice"  ? "Red juice (T4.5)"
+                              : f === "Lv. 2 Gems" ? "Lv. 2 Gems"
+                              : null;
+                return (
+                  <span className={`mat-pill ${gold === 0 ? "zero" : ""}`} key={f}>
+                    <div className="top">
+                      <MatIcon matKey={iconKey} size={16} tier45={true} />
+                      <span className="qty">{fmtCompact(count)}</span>
+                      <span className="name">{f}</span>
+                    </div>
+                    <span className="gold">{gold > 0 ? fmtGold(gold) : "(no market gold value)"}</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Step 1: frag -> cube ticket (LOSS) */}
+        <div className="j-step">
+          <div className="arrow">↓</div>
+          <div className="conv-label">
+            Exchange #1: {fmtQty(fragmentsQty)} sand{fragmentsQty !== 1 ? "s" : ""} → {fmtQty(cubeQty)} cube ticket{cubeQty !== 1 ? "s" : ""}
+            {mult === 4 && <span> (the 2 sands → 1 ticket exchange run twice)</span>}
+            {mult === 2 && <span> (one 2 sands → 1 ticket exchange)</span>}
+            {mult === 1 && <span> (½ of a 2 sands → 1 ticket exchange — needs another sand to complete)</span>}
+          </div>
+          <div className={`delta ${step1Delta < 0 ? "loss" : "gain"}`}>
+            {sign(step1Delta)}{fmtGold(step1Delta)}  ({sign(step1Pct)}{step1Pct.toFixed(0)}%)
+          </div>
+        </div>
+
+        {/* Stage 1: cube tickets */}
+        <div className="j-stage" style={{display:"block"}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:12}}>
+            <div className="name">
+              Hold: {fmtQty(cubeQty)} Cube Ticket{cubeQty !== 1 ? "s" : ""} [4th Unlock / 1720]
+              <span className="sub">Tradeable; worth {fmtGold(cubeValuePerTicket)} each on market</span>
+            </div>
+            <div className="qty-side">
+              <div className="qty">{fmtGold(stage1Value)}</div>
+              <div className="qty-sub">{fmtQty(cubeQty)} × {fmtGold(cubeValuePerTicket)}</div>
+            </div>
+          </div>
+          <div className="mat-block">
+            <div className="mat-title">Mats if you stop here (run {fmtQty(cubeQty)}× Cube 1720)</div>
+            <div className="mat-list">
+              {["Lv. 2 Gems","Leapstones","Blue juice","Red juice","Silvers"].map(f => {
+                const count = (cube1720[f] || 0) * cubeQty;
+                const gold = count * (cubeUnits[f] || 0);
+                const iconKey = f === "Leapstones" ? "T4 Leapstones"
+                              : f === "Blue juice" ? "Blue juice (T4.5)"
+                              : f === "Red juice"  ? "Red juice (T4.5)"
+                              : f === "Lv. 2 Gems" ? "Lv. 2 Gems"
+                              : null;
+                return (
+                  <span className={`mat-pill ${gold === 0 ? "zero" : ""}`} key={f}>
+                    <div className="top">
+                      <MatIcon matKey={iconKey} size={16} tier45={false} />
+                      <span className="qty">{fmtCompact(count)}</span>
+                      <span className="name">{f}</span>
+                    </div>
+                    <span className="gold">{gold > 0 ? fmtGold(gold) : "(no market gold value)"}</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Step 2: cube ticket -> Blue HK (GAIN) */}
+        <div className="j-step">
+          <div className="arrow">↓</div>
+          <div className="conv-label">
+            Exchange #2: {fmtQty(cubeQty)} cube ticket{cubeQty !== 1 ? "s" : ""} → {fmtQty(bhkQty)} Blue Hell Key{bhkQty !== 1 ? "s" : ""} (1730)
+            {mult === 4 && <span> (one 2 tickets → 1 key exchange)</span>}
+            {mult === 2 && <span> (½ of a 2 tickets → 1 key exchange — needs another ticket to complete)</span>}
+            {mult === 1 && <span> (¼ of a 2 tickets → 1 key exchange)</span>}
+          </div>
+          <div className={`delta ${step2Delta < 0 ? "loss" : "gain"}`}>
+            {sign(step2Delta)}{fmtGold(step2Delta)}  ({sign(step2Pct)}{step2Pct.toFixed(0)}%)
+          </div>
+        </div>
+
+        {/* Stage 2: Blue HK */}
+        <div className="j-stage" style={{display:"block"}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:12}}>
+            <div className="name">
+              End: {fmtQty(bhkQty)} Blue Hell Key{bhkQty !== 1 ? "s" : ""} (1730)
+              <span className="sub">Avg run pays {fmtGold(blueHKAvg)}; this is what {fragmentsQty} sand{fragmentsQty !== 1 ? "s" : ""} ultimately become</span>
+            </div>
+            <div className="qty-side">
+              <div className="qty">{fmtGold(stage2Value)}</div>
+              <div className="qty-sub">{fmtQty(bhkQty)} × {fmtGold(blueHKAvg)}</div>
+            </div>
+          </div>
+          <div className="mat-block">
+            <div className="mat-title">
+              Mats if you finish: pick ONE chest per run (1730 Destiny — avg count across floors)
+            </div>
+            <div className="mat-list">
+              {bhkPicks.map(p => {
+                const gold = p.avgGold * bhkQty;
+                const iconKey = p.col === "Stones"
+                  ? (p.stoneColor === "Blue" ? "Blue stones" : "Red stones")
+                  : colIconKey(p.col);
+                return (
+                  <span className={`mat-pill alt ${gold === 0 ? "zero" : ""}`} key={p.col}>
+                    <div className="top">
+                      <MatIcon matKey={iconKey} size={16} tier45={true} />
+                      <span className="qty">{fmtCompact(p.avgCount * bhkQty)}</span>
+                      <span className="name">{p.col}</span>
+                    </div>
+                    <span className="gold">{gold > 0 ? fmtGold(gold) : "(no market gold value)"}</span>
+                  </span>
+                );
+              })}
+            </div>
+            {(() => {
+              const K = bhkPicks.length;
+              return (
+                <div style={{marginTop:10, padding:"8px 10px", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:6, fontSize:".78rem"}}>
+                  <div style={{color:"var(--text2)", fontSize:".7rem", textTransform:"uppercase", letterSpacing:".4px", marginBottom:4, fontWeight:600}}>
+                    Expected best-of-3 (binomial math)
+                  </div>
+                  <div style={{fontSize:".72rem", color:"var(--text2)", marginBottom:6}}>
+                    The game offers 3 random chests out of {K} possible columns; player picks the best.
+                  </div>
+                  <div style={{fontFamily:"monospace", color:"var(--text2)", fontSize:".74rem", lineHeight:1.6}}>
+                    P(v_<sub>i</sub> is max) = C(K−i, n−1) / C(K, n)
+                  </div>
+                  <div style={{fontFamily:"monospace", color:"var(--text2)", fontSize:".74rem", lineHeight:1.6}}>
+                    E[max of n] = Σ v_<sub>i</sub> × C(K−i, n−1) / C(K, n)
+                  </div>
+                  <div style={{fontFamily:"monospace", color:"var(--text)", fontSize:".74rem", lineHeight:1.6, marginTop:6}}>
+                    BHK = 0.95 × E[max of 3] + 0.05 × E[max of 4]
+                    <span style={{color:"var(--text3)", marginLeft:4}}>(Chest+1 altar @ ~5%)</span>
+                  </div>
+                  <div style={{fontFamily:"monospace", color:"var(--text3)", fontSize:".7rem", marginTop:2}}>
+                    + base rewards, summed per floor and weighted by P(floor | Rare).
+                  </div>
+                  <div style={{fontFamily:"monospace", marginTop:8, fontWeight:700, fontSize:".88rem"}}>
+                    = <span className="gold-val" style={{fontSize:"1rem"}}>{fmtGold(blueHKAvg * bhkQty)}</span> per BHK run
+                  </div>
+                  <div style={{color:"var(--text3)", fontSize:".68rem", marginTop:6}}>
+                    K = {K} columns · n = chests offered · v_<sub>i</sub> sorted high → low at each floor.
+                  </div>
+
+                  {(() => {
+                    const probs = (D.probabilities && D.probabilities.Destiny) || [];
+                    const rows = probs.filter(p => (p.Rare || 0) > 0);
+                    if (rows.length === 0) return null;
+                    return (
+                      <div style={{marginTop:10, paddingTop:8, borderTop:"1px dashed var(--border)"}}>
+                        <div style={{color:"var(--text2)", fontSize:".7rem", textTransform:"uppercase", letterSpacing:".4px", marginBottom:4, fontWeight:600}}>
+                          Floor distribution P(floor | Rare)
+                        </div>
+                        <div style={{fontSize:".7rem", color:"var(--text3)", marginBottom:4}}>
+                          Each floor's expected gold is multiplied by its probability of being where a Rare-tier run ends. The probabilities sum to 1.
+                        </div>
+                        <table style={{width:"100%", borderCollapse:"collapse", fontFamily:"monospace", fontSize:".72rem"}}>
+                          <thead>
+                            <tr style={{color:"var(--text2)"}}>
+                              <th style={{textAlign:"left", padding:"2px 4px"}}>Floor</th>
+                              <th style={{textAlign:"right", padding:"2px 4px"}}>P(Rare)</th>
+                              <th style={{textAlign:"right", padding:"2px 4px", width:"45%"}}>weight bar</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map(p => {
+                              const pct = (p.Rare * 100);
+                              return (
+                                <tr key={p.range}>
+                                  <td style={{padding:"1px 4px"}}>{p.range}</td>
+                                  <td style={{padding:"1px 4px", textAlign:"right"}}>{pct.toFixed(2)}%</td>
+                                  <td style={{padding:"1px 4px"}}>
+                                    <div style={{background:"rgba(124,92,252,.4)", height:6, width: `${Math.min(100, pct/0.282 * 100)}%`, borderRadius:2}} />
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                        <div style={{color:"var(--text3)", fontSize:".66rem", marginTop:4}}>
+                          Source: Destiny Probabilities tab in Arkemys' spreadsheet · Rare column.
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })()}
+            <div className="notes" style={{marginTop:6, fontSize:".7rem"}}>
+              Each Blue HK run lets you pick exactly one of these — see the Picker tab for floor-by-floor counts.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="j-net">
+        <span className="label">Net journey: {fragmentsQty} sand{fragmentsQty !== 1 ? "s" : ""} — chain vs direct Haal's redemption</span>
+        <span className="val" style={{color: netDelta >= 0 ? "var(--green)" : "var(--red)"}}>
+          {sign(netDelta)}{fmtGold(netDelta)}
+          <span style={{color:"var(--text3)", fontSize:".78rem", marginLeft:8, fontWeight:400}}>
+            ({stage0Value > 0 ? `${sign(netDelta)}${((netDelta/stage0Value)*100).toFixed(0)}%` : "—"} vs Haal's)
+          </span>
+        </span>
+      </div>
+
+      {(() => {
+        // All step deltas computed for the full chain (4 sands → 1 BHK), independent of `mult`.
+        const step1Per = cubeValuePerTicket - perSand * 2;     // per 2-sand → 1-ticket conversion
+        const step2Per = blueHKAvg - cubeValuePerTicket * 2;   // per 2-ticket → 1-BHK conversion
+        const fullChainNet = blueHKAvg - perSand * 4;          // 4 sands chained vs 4 sands at Haal's
+
+        const step1Class = step1Per >= 0 ? "delta-pos" : "delta-neg";
+        const step1Label = step1Per >= 0 ? "value-positive" : "value-negative";
+        const step1ResultWord = step1Per >= 0 ? "" : "only ";
+
+        const step2Class = step2Per >= 0 ? "delta-pos" : "delta-neg";
+        let step2Verb;
+        if (step2Per < 0) {
+          step2Verb = step1Per < 0 ? "loses even more" : "gives some of it back";
+        } else if (step1Per >= 0) {
+          step2Verb = "compounds the gain";
+        } else if (fullChainNet > 0) {
+          step2Verb = "more than recovers it";
+        } else if (fullChainNet < 0) {
+          step2Verb = "doesn't fully recover it";
+        } else {
+          step2Verb = "exactly offsets it";
+        }
+
+        const netClass = fullChainNet >= 0 ? "delta-pos" : "delta-neg";
+        const netDirection = fullChainNet >= 0 ? "in the chain's favor" : "in Haal's favor";
+
+        return (
+          <div className="notes" style={{marginTop:14}}>
+            Step 1 (sands → cube tickets) is <span className={step1Class}>{step1Label}</span>: 2 sands worth {fmtGold(perSand*2)} of Haal's mats become 1 cube ticket worth {step1ResultWord}{fmtGold(cubeValuePerTicket)}.
+            Step 2 (cube tickets → Blue HK) <span className={step2Class}>{step2Verb}</span>: 2 cube tickets ({fmtGold(cubeValuePerTicket*2)}) become 1 Blue HK avg {fmtGold(blueHKAvg)}.
+            Net for the full chain (4 sands → 1 BHK): <b className={netClass}>{sign(fullChainNet)}{fmtGold(fullChainNet)}</b> {netDirection} over feeding all 4 sands directly into Haal's.
+          </div>
+        );
+      })()}
+
+      <div className="notes" style={{marginTop:12}}>
+        Source: Hell Key conversion; cube and HK avg gold from Arkemys' spreadsheet.
+      </div>
+    </div>
+  );
+}
+
+function CubesTab({setupState}) {
+  const { priceOverrides, silverPrice } = setupState;
+  const [doubled, setDoubled] = useState(false);
+  const mult = doubled ? 2 : 1;
+  const cubes = (D.cube_rewards || []).filter(c => c.name && !c.name.startsWith("Unit gold value"));
+  const fields = ["Lv. 2 Gems", "Leapstones", "Blue juice", "Red juice", "Silvers"];
+
+  // Per-mat unit prices come from the user's overrides. Cubes (1640-1720, 1st-3rd
+  // Unlock) use T4 Leapstones; Haal's Hourglass uses T4.5 Leapstones. Lv 2 Gems,
+  // juices, and silver are shared.
+  const matUnit = (key) => {
+    if (priceOverrides[key] !== undefined) return priceOverrides[key];
+    return (PRICE_MATS.find(m => m.key === key) || {}).defaultPrice || 0;
+  };
+  const isHaal = (name) => /Haal/i.test(name);
+  const unitFor = (cubeName, field) => {
+    if (field === "Lv. 2 Gems") return matUnit("Lv. 2 Gems");
+    if (field === "Blue juice") return matUnit("Blue juice (T4.5)");
+    if (field === "Red juice")  return matUnit("Red juice (T4.5)");
+    if (field === "Silvers")    return silverPrice;
+    if (field === "Leapstones") return matUnit(isHaal(cubeName) ? "Leapstones" : "T4 Leapstones");
+    return 0;
+  };
+  const cubeTotal = (c) => fields.reduce((s, f) => s + (c[f] || 0) * unitFor(c.name, f), 0);
+
+  return (
+    <div className="panel" style={{maxWidth:1000, margin:"0 auto"}}>
+      <h2>Cubes — Reward Verification</h2>
+      <div className="notes" style={{marginBottom:12}}>
+        Average rewards per cube ticket. Gold values use <b>your override prices</b> from the Setup sidebar (gem, leapstone, juice, and silver).
+        Toggle <b>2×</b> to see what running each cube twice pays out (the cube-ticket equivalent of one Blue Hell Key via the sand chain).
+      </div>
+
+      <div className="mult-row">
+        <span className="notes" style={{marginRight:4}}>Multiplier:</span>
+        <button className={`mult-btn ${!doubled ? "on" : ""}`} onClick={() => setDoubled(false)}>1×</button>
+        <button className={`mult-btn ${doubled ? "on" : ""}`} onClick={() => setDoubled(true)}>2×</button>
+      </div>
+
+      <table className="verify-tbl">
+        <thead><tr>
+          <th>Cube</th>
+          {fields.map(f => {
+            const headerIcon = f === "Lv. 2 Gems" ? "Lv. 2 Gems"
+                            : f === "Leapstones" ? "Leapstones"
+                            : f === "Blue juice" ? "Blue juice (T4.5)"
+                            : f === "Red juice"  ? "Red juice (T4.5)"
+                            : null;
+            return (
+              <th key={f} className="num" style={{whiteSpace:"nowrap"}}>
+                <MatIcon matKey={headerIcon} size={14} tier45={true} /> {f}
+              </th>
+            );
+          })}
+          <th className="num">Total gold</th>
+        </tr></thead>
+        <tbody>
+          {cubes.map(c => {
+            const total = cubeTotal(c) * mult;
+            return (
+              <tr key={c.name}>
+                <td className="name-cell">
+                  {c.name}
+                  <div style={{fontSize:".68rem", color:"var(--text3)", fontWeight:400}}>
+                    {isHaal(c.name) ? "T4.5 leapstones" : "T4 leapstones"}
+                  </div>
+                </td>
+                {fields.map(f => {
+                  const count = (c[f] || 0) * mult;
+                  const unit = unitFor(c.name, f);
+                  const gold = count * unit;
+                  return (
+                    <td key={f} className="num">
+                      <div>{fmt(count)}</div>
+                      {gold > 0 && <div style={{fontSize:".66rem", color:"var(--gold-dim)"}}>{fmtGold(gold)}</div>}
+                    </td>
+                  );
+                })}
+                <td className="num gold-val" style={{fontWeight:700}}>{fmtGold(total)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <div className="notes" style={{marginTop:12}}>
+        "Lv. 2 Gems" are the universal cuttable gems that drop from cubes. "Blue juice" = Glacier's Breath, "Red juice" = Lava's Breath (T4.5 honing fuel). Haal's Hourglass cubes drop T4.5 leapstones; Cube tickets (1st–3rd Unlock + Cube 1720) drop T4 leapstones. Silver gold value follows your Silver setting (default: worthless).
+      </div>
+    </div>
+  );
+}
+
+// Map a spreadsheet column name to the logical mat key used for price overrides.
+// Multiple columns can share a key — e.g. "Stones" and "Base red stones" are both
+// red stones, so the user only needs to set one price for both.
+function matKey(col) {
+  if (col === "Stones" || col === "Base red stones") return "Red stones";
+  if (col === "Base blue stones") return "Blue stones";
+  if (col === "Leapstones" || col === "Base leapstones") return "Leapstones";
+  if (col === "Base shards") return "Shards";
+  return col;
+}
+
+// Logical mats shown in the price-override panel, in display order.
+// Each entry: { key, label, defaultPrice, columns, group }.
+const PRICE_MATS = [
+  { key: "Red stones",   label: "Red stones",        defaultPrice: 31.30, cols: ["Stones", "Base red stones"], group: "tier", x100: true },
+  { key: "Blue stones",  label: "Blue stones",       defaultPrice: 1.45,  cols: ["Base blue stones"], group: "tier", x100: true },
+  { key: "Leapstones",   label: "Leapstones (T4.5)", defaultPrice: 107,  cols: ["Leapstones", "Base leapstones"], group: "tier" },
+  { key: "T4 Leapstones",label: "Leapstones (T4)",   defaultPrice: 13,   cols: [], group: "tier" },
+  { key: "Fusions",      label: "Fusions",           defaultPrice: 241,  cols: ["Fusions"], group: "tier" },
+  { key: "Blue juice (T4.5)", label: "Blue juice (Glacier's Breath)", defaultPrice: 200, cols: [], group: "tier" },
+  { key: "Red juice (T4.5)",  label: "Red juice (Lava's Breath)",     defaultPrice: 400, cols: [], group: "tier" },
+  { key: "Free taps",    label: "Special Hones",     defaultPrice: 1000, cols: ["Free taps"], group: "tier" },
+  { key: "Karma",        label: "Karma",             defaultPrice: 600,  cols: ["Karma"], group: "tier" },
+  { key: "Bracelets",    label: "Bracelets",         defaultPrice: 10,   cols: ["Bracelets"], group: "tier" },
+  { key: "Accessories",  label: "Accessories",       defaultPrice: 0,    cols: ["Accessories"], group: "tier" },
+  { key: "Ability stones", label: "Ability stones",  defaultPrice: 0,    cols: ["Ability stones"], group: "tier" },
+  { key: "Elysian ticket", label: "Elysian ticket",  defaultPrice: 0,    cols: ["Elysian ticket"], group: "tier" },
+  { key: "Gold",         label: "Gold",              defaultPrice: 1,    cols: ["Gold"], group: "tier" },
+  { key: "Lv. 2 Gems",   label: "Lv. 2 Gem",         defaultPrice: 135000 / 243, cols: [], group: "gem" },
+];
+
+// Lv. 7 = 3^5 × Lv. 2 (each fuse step takes 3 gems → 1, so 5 levels = 243× cost).
+const GEM_L7_RATIO = 243;
+
+// Material icons in icons/. Each mat has a T4.5 (1730 new) and T4 (1640/1680/1700)
+// variant; MatIcon picks based on context. The current decrypted DB doesn't yet
+// contain the 1730-new versions of stones / leapstones / fusions / special hones
+// (the user's "Destiny Crystallized Destruction Stone", "Great Destiny Leapstone",
+// "Superior Abidos Fusion Material", "Special Honing: Transferred Leapstone"
+// don't have rows yet) — so T4.5 falls back to the T4 icon until they're added.
+const ICONS = {
+  redStones:    { t4_5: "use_12_88_t45.png", t4: "use_12_88.png" /* T4: Destiny / T4.5: Destiny Crystallized */ },
+  blueStones:   { t4_5: "use_12_89_t45.png", t4: "use_12_89.png" /* T4: Destiny / T4.5: Destiny Crystallized */ },
+  leapstones:   { t4_5: "use_12_85_t45.png", t4: "use_12_85.png" /* T4: Destiny / T4.5: Great Destiny */ },
+  fusions:      { t4_5: "use_12_86_t45.png", t4: "use_12_86.png" /* T4: Abidos / T4.5: Superior Abidos */ },
+  specialHones: { t4_5: "use_12_87_t45.png", t4: "use_12_87.png" /* T4: Circulated / T4.5: Transferred Leapstone */ },
+  // Juice (Glacier/Lava's Breath) — same icons across tiers
+  redJuice:     { t4_5: "use_12_171.png", t4: "use_12_171.png" },
+  blueJuice:    { t4_5: "use_12_172.png", t4: "use_12_172.png" },
+  // Bracelet: user-chosen Radiant Savior icon
+  bracelets:    { t4_5: "acc_327.png",    t4: "acc_327.png" },
+  // Accessories: Arriving Battle Necklace (Ancient grade)
+  accessories:  { t4_5: "acc_215.png",    t4: "acc_215.png" },
+  // Elysian ticket
+  elysian:      { t4_5: "use_13_239.png", t4: "use_13_239.png" },
+  silver:       { t4_5: "use_11_208.png", t4: "use_11_208.png" },
+  // Ability Stone (Ancient grade)
+  abilityStones:{ t4_5: "ability_247.png", t4: "ability_247.png" },
+  // Awaiting LPK extraction (Use_13 page > 30, Money_15, etc.)
+  gemL2:        { t4_5: "use_13_47.png", t4: "use_13_47.png" /* Lv. 2 Brilliant Gem */ },
+  gemL7:        { t4_5: "use_13_52.png", t4: "use_13_52.png" /* Lv. 7 Brilliant Gem */ },
+  karma:        { t4_5: "use_13_220.png", t4: "use_13_220.png" /* Processed Destiny Stone */ },
+  gold:         { t4_5: "use_13_34.png", t4: "use_13_34.png" /* Gold */ },
+  hellKey:      { t4_5: "use_13_84.png", t4: "use_13_84.png" /* Hell Key of Destiny V Rare */ },
+  sandTrial:    { t4_5: "money_15.png", t4: "money_15.png" /* Destiny Shard / Sand of Trial */ },
+  astroUncommon:{ t4_5: "use_13_104.png", t4: "use_13_104.png" /* Order Astrogem: Stability */ },
+  astroRare:    { t4_5: "use_13_107.png", t4: "use_13_107.png" /* Chaos Astrogem: Corrosion */ },
+  astroEpic:    { t4_5: "use_13_109.png", t4: "use_13_109.png" /* Chaos Astrogem: Destruction */ },
+};
+
+// Resolve a logical mat key + tier-tier (T4 or T4.5) into a filename.
+// For PRICE_MATS keys (Red stones, Blue stones, etc.), the tier is auto-derived
+// from the key when it's tier-locked (e.g. "T4 Leapstones" always = T4).
+function iconFor(matKey, tier45) {
+  const t = tier45 ? "t4_5" : "t4";
+  switch (matKey) {
+    case "Red stones":         return ICONS.redStones[t]      || ICONS.redStones.t4_5;
+    case "Blue stones":        return ICONS.blueStones[t]     || ICONS.blueStones.t4_5;
+    case "Leapstones":         return ICONS.leapstones.t4_5;
+    case "T4 Leapstones":      return ICONS.leapstones.t4;
+    case "Fusions":            return ICONS.fusions[t]        || ICONS.fusions.t4_5;
+    case "Blue juice (T4.5)":  return ICONS.blueJuice.t4_5;
+    case "Red juice (T4.5)":   return ICONS.redJuice.t4_5;
+    case "Free taps":          return ICONS.specialHones[t]   || ICONS.specialHones.t4_5;
+    case "Bracelets":          return ICONS.bracelets[t]      || ICONS.bracelets.t4_5;
+    case "Accessories":        return ICONS.accessories[t]    || ICONS.accessories.t4_5;
+    case "Ability stones":     return ICONS.abilityStones[t]  || ICONS.abilityStones.t4_5;
+    case "Elysian ticket":     return ICONS.elysian[t]        || ICONS.elysian.t4_5;
+    case "Lv. 2 Gems":         return ICONS.gemL2[t]          || ICONS.gemL2.t4_5;
+    case "Lv. 7 Gems":         return ICONS.gemL7[t]          || ICONS.gemL7.t4_5;
+    case "Karma":              return ICONS.karma[t]          || ICONS.karma.t4_5;
+    case "Gold":               return ICONS.gold[t]           || ICONS.gold.t4_5;
+    case "Silver":             return ICONS.silver[t]         || ICONS.silver.t4_5;
+    case "Astrogem (uncommon)":return ICONS.astroUncommon.t4_5;
+    case "Astrogem (rare)":    return ICONS.astroRare.t4_5;
+    case "Astrogem (epic)":    return ICONS.astroEpic.t4_5;
+    default: return null;
+  }
+}
+
+function MatIcon({matKey, size, tier45}) {
+  const file = iconFor(matKey, tier45 !== false);
+  if (!file) return null;
+  const px = size || 18;
+  return (
+    <img src={"icons/" + file} alt="" width={px} height={px}
+         style={{verticalAlign:"middle", marginRight:6, borderRadius:3, flexShrink:0}} />
+  );
+}
+
+// Map a tier-reward column name to the icon key it should use.
+function colIconKey(col) {
+  if (col === "Stones") return "Red stones";
+  if (col === "Leapstones") return "Leapstones";
+  if (col === "Fusions") return "Fusions";
+  if (col === "Juice") return "Red juice (T4.5)";
+  if (col === "Free taps") return "Free taps";
+  if (col === "Bracelets") return "Bracelets";
+  if (col === "Accessories") return "Accessories";
+  if (col === "Ability stones") return "Ability stones";
+  if (col === "Elysian ticket") return "Elysian ticket";
+  if (col === "Karma") return "Karma";
+  if (col === "Gold") return "Gold";
+  if (col === "Random Astrogems" || col === "Selectable Astrogems") return "Astrogem (rare)";
+  return null;
+}
+
+// Returns true if a tier label refers to T4.5 (1730 new) content. T4 covers
+// Old 1730 and 1640/1680/1700.
+function tierIsT45(tierLabel) {
+  if (!tierLabel) return true;
+  return /^1730 /.test(tierLabel) && !/Old/.test(tierLabel);
+}
+
+// Compute floor-probability-weighted chest picks for a given Hell Key tier.
+// hellKeyTier is one of "Common"/"Uncommon"/"Rare"/"Epic"/"Legendary"/"Relic"/"Ancient".
+// Probabilities sum to ~1 across floors for each tier — they describe the floor
+// distribution conditional on that tier being rolled. So the expected mat
+// count/gold for a run = Σ P(floor | tier) × value_at_floor.
+//
+// effPriceFn (col, tierLabel) returns the user's effective unit gold for a column.
+// astroPrices is the rarity-tier price dict { uncommon, rare, epic }.
+// Binomial coefficient for small n (chest column counts are < 20).
+function nCk(n, k) {
+  if (k < 0 || k > n) return 0;
+  if (k === 0 || k === n) return 1;
+  k = Math.min(k, n - k);
+  let c = 1;
+  for (let i = 0; i < k; i++) c = c * (n - i) / (i + 1);
+  return c;
+}
+
+// Expected value of the maximum of n uniformly-random draws (without replacement)
+// from `values`, which we assume are sorted descending. Each subset of size n is
+// equally likely, so v_i is the max in a subset iff the other n-1 elements come
+// from the K-i values below it: P(max = v_i) = C(K-i, n-1) / C(K, n).
+function expectedMaxOfN(sortedValues, n) {
+  const K = sortedValues.length;
+  if (K === 0 || n <= 0) return 0;
+  if (n >= K) return sortedValues[0]; // forced to take the best
+  const total = nCk(K, n);
+  let exp = 0;
+  for (let i = 0; i < K - n + 1; i++) {
+    const v = sortedValues[i];
+    const ways = nCk(K - i - 1, n - 1);
+    exp += v * (ways / total);
+  }
+  return exp;
+}
+
+// Probability that the run is operating under a Chest +1 altar effect when the
+// player walks up to the rewards. The user calibrates this at 5% (~the in-game
+// rate accounting for altar floor incidence × selection weight).
+const CHEST_PLUS_1_PROB = 0.05;
+
+// The Stones chest in-game is a *selection chest*: pick 1 destruction (red) OR 3
+// guardian (blue) stones per unit (sekwahar's TrinityInferno data confirms the
+// 1:3 ratio at every Honing Support level). The spreadsheet records the red
+// count, so blue payout = 3× count. We auto-pick whichever yields more gold.
+const STONES_BLUE_RATIO = 3;
+
+// Evaluate one chest column at a given floor. Returns { count, unitGold, gold,
+// stoneColor (null|"Red"|"Blue"), colorCount }. Astrogems are evaluated by grade
+// composition; Stones picks the higher of red vs blue × 3.
+function evalChestColumn(col, value, effPriceFn, tierLabel, astroPrices) {
+  if (value == null || value === "") return null;
+  if (typeof value === "string") {
+    if (!value.includes("|")) return null;
+    return {
+      count: value, unitGold: "—",
+      gold: valueAstrogem(value, astroPrices),
+      stoneColor: null,
+    };
+  }
+  const cnt = typeof value === "number" ? value : parseFloat(value);
+  if (col === "Stones") {
+    const redPrice  = effPriceFn ? effPriceFn("Stones", tierLabel) : 0;            // matKey "Red stones"
+    const bluePrice = effPriceFn ? effPriceFn("Base blue stones", tierLabel) : 0;  // matKey "Blue stones"
+    const redGold  = cnt * redPrice;
+    const blueGold = cnt * STONES_BLUE_RATIO * bluePrice;
+    if (blueGold > redGold) {
+      return {
+        count: cnt * STONES_BLUE_RATIO, unitGold: bluePrice,
+        gold: blueGold, stoneColor: "Blue", colorCount: cnt * STONES_BLUE_RATIO,
+      };
+    }
+    return {
+      count: cnt, unitGold: redPrice,
+      gold: redGold, stoneColor: "Red", colorCount: cnt,
+    };
+  }
+  const unit = effPriceFn ? effPriceFn(col, tierLabel) : 0;
+  return { count: cnt, unitGold: unit, gold: cnt * unit, stoneColor: null };
+}
+
+// Per-floor guaranteed base reward gold = sum over Base shards/red stones/blue stones/leapstones.
+function floorBaseGold(floor, tierLabel, effPriceFn) {
+  const baseCols = ["Base red stones", "Base blue stones", "Base leapstones", "Base shards"];
+  let total = 0;
+  for (const col of baseCols) {
+    const v = floor.rewards[col];
+    if (typeof v !== "number") continue;
+    const unit = effPriceFn ? effPriceFn(col, tierLabel) : 0;
+    total += v * unit;
+  }
+  return total;
+}
+
+// Floor-prob-weighted expected gold for a Blue Hell Key run.
+//   The game offers the player 3 random chest columns at the floor (or 4 if a
+//   Chest +1 altar is in play, ~5% of runs). The player picks the best among
+//   those offered. So the per-floor expected pick value =
+//     (1 - 0.05) × E[max of 3 random columns]  +  0.05 × E[max of 4 random columns]
+//   plus the floor's guaranteed base rewards. Floors are weighted by P(floor | tier).
+function getWeightedBestPickGold(tierLabel, hellKeyTier, effPriceFn, astroPrices) {
+  const tier = D.key_tiers.find(t => t.label === tierLabel);
+  if (!tier) return 0;
+  const probKey = tierLabel.includes("Flame") ? "Flame"
+                : tierLabel.includes("Frost") ? "Frost"
+                : "Destiny";
+  const probs = (D.probabilities && D.probabilities[probKey]) || [];
+  const floorProb = {};
+  for (const p of probs) floorProb[p.range] = p[hellKeyTier] || 0;
+  const totalProb = Object.values(floorProb).reduce((a,b) => a+b, 0);
+  const BLOCK = new Set([
+    "_", "Av. gold value (Destiny)", "Av. gold value (Flame)", "Av. gold value (Frost)", "Av. gold value",
+    "Base shards", "Base red stones", "Base blue stones", "Base leapstones",
+  ]);
+  const aPrices = astroPrices || ASTRO_DEFAULTS;
+  let weighted = 0;
+  for (const f of tier.floors) {
+    const p = floorProb[f.range] || 0;
+    if (p === 0) continue;
+    // Collect every chest column's gold value at this floor.
+    const values = [];
+    for (const col of tier.columns) {
+      if (BLOCK.has(col)) continue;
+      const ev = evalChestColumn(col, f.rewards[col], effPriceFn, tierLabel, aPrices);
+      if (!ev) continue;
+      values.push(ev.gold);
+    }
+    values.sort((a, b) => b - a);
+    const expBest = (1 - CHEST_PLUS_1_PROB) * expectedMaxOfN(values, 3)
+                  +      CHEST_PLUS_1_PROB  * expectedMaxOfN(values, 4);
+    const floorTotal = expBest + floorBaseGold(f, tierLabel, effPriceFn);
+    weighted += floorTotal * p;
+  }
+  if (totalProb > 0 && Math.abs(totalProb - 1) > 0.001) weighted /= totalProb;
+  return weighted;
+}
+
+function getWeightedChestPicks(tierLabel, hellKeyTier, effPriceFn, astroPrices) {
+  const tier = D.key_tiers.find(t => t.label === tierLabel);
+  if (!tier) return [];
+  const probKey = tierLabel.includes("Flame") ? "Flame"
+                : tierLabel.includes("Frost") ? "Frost"
+                : "Destiny";
+  const probs = (D.probabilities && D.probabilities[probKey]) || [];
+  const floorProb = {};
+  for (const p of probs) floorProb[p.range] = p[hellKeyTier] || 0;
+  const totalProb = Object.values(floorProb).reduce((a,b) => a+b, 0);
+
+  const BLOCK = new Set([
+    "_", "Av. gold value (Destiny)", "Av. gold value (Flame)", "Av. gold value (Frost)", "Av. gold value",
+    "Base shards", "Base red stones", "Base blue stones", "Base leapstones",
+  ]);
+  const aPrices = astroPrices || ASTRO_DEFAULTS;
+  // Pre-compute the floor-weighted base reward gold so we can fold it into each
+  // chest's avgGold (every pick at a floor inherits that floor's base rewards).
+  let weightedBase = 0;
+  for (const f of tier.floors) {
+    const p = floorProb[f.range] || 0;
+    if (p === 0) continue;
+    weightedBase += floorBaseGold(f, tierLabel, effPriceFn) * p;
+  }
+  if (totalProb > 0 && Math.abs(totalProb - 1) > 0.001) weightedBase /= totalProb;
+
+  const rows = [];
+  for (const col of tier.columns) {
+    if (BLOCK.has(col)) continue;
+    let count = 0, gold = 0;
+    let lastStoneColor = null;
+    for (const f of tier.floors) {
+      const p = floorProb[f.range] || 0;
+      if (p === 0) continue;
+      const ev = evalChestColumn(col, f.rewards[col], effPriceFn, tierLabel, aPrices);
+      if (!ev) continue;
+      const cnt = typeof ev.count === "number" ? ev.count : astrogemTotalCount(ev.count);
+      count += cnt * p;
+      gold += ev.gold * p;
+      if (ev.stoneColor) lastStoneColor = ev.stoneColor;
+    }
+    if (count === 0 && gold === 0) continue;
+    if (totalProb > 0 && Math.abs(totalProb - 1) > 0.001) {
+      count /= totalProb;
+      gold /= totalProb;
+    }
+    rows.push({ col, avgCount: count, avgGold: gold + weightedBase, stoneColor: lastStoneColor });
+  }
+  rows.sort((a, b) => b.avgGold - a.avgGold);
+  return rows;
+}
+
+function PickerContent({tier, floor, setupState}) {
+  const { priceOverrides, astroPrices, past25, effPrice, baselineUnitGold, baseRewardGold, silverPrice } = setupState;
+  const baseGold = baseRewardGold(floor, tier.label);
+
+  // Mirror the Sands → Keys journey numbers so the right rail can summarize them.
+  const matUnit = (key) => {
+    if (priceOverrides[key] !== undefined) return priceOverrides[key];
+    return (PRICE_MATS.find(m => m.key === key) || {}).defaultPrice || 0;
+  };
+  const haal1730 = (D.cube_rewards || []).find(c => c.name === "Haal's Hourglass 1730") || {};
+  const cube1720 = (D.cube_rewards || []).find(c => c.name === "Cube 1720") || {};
+  const haalU = {
+    "Lv. 2 Gems": matUnit("Lv. 2 Gems"),
+    "Leapstones": matUnit("Leapstones"),
+    "Blue juice": matUnit("Blue juice (T4.5)"),
+    "Red juice":  matUnit("Red juice (T4.5)"),
+    "Silvers":    silverPrice,
+  };
+  const cubeU = {
+    "Lv. 2 Gems": matUnit("Lv. 2 Gems"),
+    "Leapstones": matUnit("T4 Leapstones"),
+    "Blue juice": matUnit("Blue juice (T4.5)"),
+    "Red juice":  matUnit("Red juice (T4.5)"),
+    "Silvers":    silverPrice,
+  };
+  const matFields = ["Lv. 2 Gems", "Leapstones", "Blue juice", "Red juice", "Silvers"];
+  const perSand = matFields.reduce((s, f) => s + (haal1730[f] || 0) * (haalU[f] || 0), 0);
+  const perCubeTicket = matFields.reduce((s, f) => s + (cube1720[f] || 0) * (cubeU[f] || 0), 0);
+  const perBHK = useMemo(
+    () => getWeightedBestPickGold("1730 Destiny Rewards", "Rare", effPrice, astroPrices),
+    [effPrice, astroPrices, priceOverrides, past25, silverPrice]
+  );
+  const chainNet = perBHK - perSand * 4;
+
+  // Wealth +1 (Abundant chest) replaces the SubDrop = base rewards, NOT the main
+  // chest pick. So wealth × 10 multiplies just the base portion, not chestGold.
+  // Each row has an independent wealth toggle since the player can see which
+  // chests will roll Abundant before opening.
+  const [wealth, setWealth] = useState({}); // { [colName]: bool }
+  useEffect(() => { setWealth({}); }, [tier, floor]);
+
+  function toggleWealth(col) {
+    setWealth(prev => ({...prev, [col]: !prev[col]}));
+  }
+
+  // Build the chest rows with their main-pick gold value (chestGold). The wealth
+  // multiplier is applied to baseGold separately when computing `effective`.
+  const rows = useMemo(() => {
+    const out = [];
+    for (const col of tier.columns) {
+      if (!isPickableColumn(col)) continue;
+      const evaluated = evalChestColumn(col, floor.rewards[col], effPrice, tier.label, astroPrices);
+      if (!evaluated) continue;
+      out.push({
+        col,
+        count: evaluated.count,
+        unitGold: evaluated.unitGold,
+        chestGold: evaluated.gold,
+        stoneColor: evaluated.stoneColor,
+      });
+    }
+    return out;
+  }, [tier, floor, priceOverrides, astroPrices, past25]);
+
+  // Effective gold per chest = chestGold + wealth-multiplied baseGold. Sort desc.
+  const ranked = useMemo(() => {
+    return rows.map(r => {
+      const isWealth = !!wealth[r.col];
+      const wealthMult = isWealth ? 10 : 1;
+      return {
+        ...r,
+        isWealth,
+        wealthMult,
+        baseEff: baseGold * wealthMult,
+        effective: r.chestGold + baseGold * wealthMult,
+      };
+    }).sort((a,b) => b.effective - a.effective);
+  }, [rows, wealth, baseGold]);
+
+  const bestRow = ranked[0] || null;
+
+  // Track rank changes so we can flash rows that moved when wealth toggles re-sort.
+  // The animation key is bumped each time the ranking changes so React re-applies
+  // the CSS animation cleanly. Cleared after 1.1s to match the keyframe duration.
+  const prevRanksRef = useRef({});
+  const [movedRows, setMovedRows] = useState({}); // colName -> {dir, key}
+  useEffect(() => {
+    const prev = prevRanksRef.current;
+    const next = {};
+    ranked.forEach((r, i) => { next[r.col] = i; });
+    if (Object.keys(prev).length === 0) {
+      // First render: just snapshot, don't animate.
+      prevRanksRef.current = next;
+      return;
+    }
+    const moved = {};
+    const stamp = Date.now();
+    let any = false;
+    ranked.forEach((r, i) => {
+      const prevIdx = prev[r.col];
+      if (prevIdx !== undefined && prevIdx !== i) {
+        moved[r.col] = { dir: prevIdx > i ? "up" : "down", key: stamp + ":" + r.col };
+        any = true;
+      }
+    });
+    prevRanksRef.current = next;
+    if (any) {
+      setMovedRows(moved);
+      const t = setTimeout(() => setMovedRows({}), 1100);
+      return () => clearTimeout(t);
+    }
+  }, [ranked]);
+  // Reset move tracking when tier or floor changes (the whole list is "new").
+  useEffect(() => {
+    prevRanksRef.current = {};
+    setMovedRows({});
+  }, [tier, floor]);
+
+  // Cube comparison: 2× cube vs the floor's best chest (with current wealth state).
+  const cubeRows = useMemo(() => {
+    const cubes = D.overview.cube_avg_gold || [];
+    const baseline = bestRow ? bestRow.effective : 0;
+    return cubes.map(c => {
+      const twoCube = c.avg_gold * 2;
+      const delta = baseline - twoCube;
+      const pct = twoCube > 0 ? (delta / twoCube) * 100 : null;
+      return { name: c.name, gold: c.avg_gold, twoCube, delta, pct };
+    });
+  }, [bestRow]);
+
+  const bestCubeIdx = cubeRows.reduce((bestI, r, i, a) => r.twoCube > a[bestI].twoCube ? i : bestI, 0);
+
+  return (
+    <>
+      {tier.is_old && <div className="banner">Showing the <b>OLD</b> 1730 Destiny tier (pre-rework). Switch to "1730 Destiny Rewards" for current values.</div>}
+      <div className="picker-grid">
+
+        {/* CENTER: ranked chest table */}
+        <div className="panel">
+          <h2 style={{display:"flex", flexWrap:"wrap", alignItems:"center", gap:10}}>
+            <span>{tier.label.replace(" Rewards","")} · Floor {floor.range}</span>
+            {tier.is_old && <span className="tag old">old</span>}
+            {(() => {
+              const baseDefs = [
+                { col: "Base red stones",  short: "Red stones" },
+                { col: "Base blue stones", short: "Blue stones" },
+                { col: "Base leapstones",  short: "Leapstones" },
+                { col: "Base shards",      short: "Shards" },
+              ];
+              const items = baseDefs
+                .map(d => ({...d, count: floor.rewards[d.col]}))
+                .filter(d => typeof d.count === "number" && d.count > 0);
+              if (items.length === 0) return null;
+              return (
+                <span style={{display:"flex", flexWrap:"wrap", alignItems:"center", gap:6, fontSize:".68rem", textTransform:"none", letterSpacing:0, fontWeight:400}}>
+                  <span style={{color:"var(--text3)"}}>+ in every chest:</span>
+                  {items.map(d => {
+                    const gold = d.count * effPrice(d.col, tier.label);
+                    return (
+                      <span key={d.col} style={{background:"var(--surface2)", border:"1px solid var(--border)", borderRadius:6, padding:"2px 6px", display:"inline-flex", flexDirection:"column", lineHeight:1.2}}>
+                        <span><b style={{color:"var(--gold)"}}>{fmt(d.count)}</b> <span style={{color:"var(--text2)"}}>{d.short}</span></span>
+                        {gold > 0 && <span style={{color:"var(--gold-dim)", fontSize:".62rem"}}>{fmtGold(gold)}</span>}
+                      </span>
+                    );
+                  })}
+                  <span style={{color:"var(--text3)"}}>=</span>
+                  <span style={{color:"var(--gold)", fontWeight:700}}>{fmtGold(baseGold)}</span>
+                </span>
+              );
+            })()}
+          </h2>
+          <div className="notes" style={{marginBottom:6}}>
+            Toggle <b style={{color:"var(--wealth)"}}>★</b> on any chest you've spotted as Abundant — Wealth +1 only multiplies the <b>base rewards</b> by 10× (the SubDrop), not the chest's main loot. Best chest at this floor is highlighted.
+          </div>
+          <table className="chest-tbl">
+            <thead><tr>
+              <th>Chest</th>
+              <th className="num">Count</th>
+              <th className="num">Unit g</th>
+              <th className="num">Chest g</th>
+              <th className="num">+ Base</th>
+              <th style={{width:36, textAlign:"center"}} title="Wealth +1 (×10 base only)">★</th>
+              <th className="num">Effective</th>
+            </tr></thead>
+            <tbody>
+              {ranked.length === 0 && <tr><td colSpan="7" className="empty-msg">No reward data for this floor.</td></tr>}
+              {ranked.map((r, i) => {
+                const isTop = i === 0;
+                const move = movedRows[r.col];
+                const movedCls = move ? (move.dir === "up" ? "moved-up" : "moved-down") : "";
+                return (
+                  <tr key={r.col + (move ? ":" + move.key : "")}
+                      className={`${r.isWealth ? "wealth" : ""} ${isTop ? "top" : ""} ${movedCls}`}>
+                    <td>
+                      {move && (
+                        <span className={`move-indicator ${move.dir}`} title={move.dir === "up" ? "moved up" : "moved down"}>
+                          {move.dir === "up" ? "▲" : "▼"}
+                        </span>
+                      )}
+                      {(() => {
+                        const iconKey = r.col === "Stones"
+                          ? (r.stoneColor === "Blue" ? "Blue stones" : "Red stones")
+                          : colIconKey(r.col);
+                        return iconKey ? <MatIcon matKey={iconKey} size={20} tier45={tierIsT45(tier.label)} /> : null;
+                      })()}
+                      <b>{r.col}</b>
+                      {r.stoneColor && (
+                        <div style={{fontSize:".7rem", marginTop:1, color: r.stoneColor === "Red" ? "#ef4444" : "#60a5fa"}}>
+                          Pick <b>{r.stoneColor === "Red" ? "Destruction (Red)" : "Guardian (Blue)"}</b>
+                        </div>
+                      )}
+                      {typeof r.count === "string" && r.count.includes("|") && (() => {
+                        const [g, b, p] = r.count.split("|").map(x => parseFloat(x) || 0);
+                        const parts = [];
+                        if (g > 0) parts.push(`${g} min-Uncommon`);
+                        if (b > 0) parts.push(`${b} Rare-capable`);
+                        if (p > 0) parts.push(`${p} Epic-only`);
+                        return parts.length ? <div style={{fontSize:".7rem", color:"var(--text3)", marginTop:1}}>{parts.join(" · ")}</div> : null;
+                      })()}
+                    </td>
+                    <td className="num">
+                      {typeof r.count === "string" && r.count.includes("|")
+                        ? r.count.split("|").map(x => parseFloat(x)||0).reduce((a,b) => a+b, 0)
+                        : fmt(r.count)}
+                    </td>
+                    <td className="num gold-dim">{typeof r.unitGold === "number" ? fmt(r.unitGold) : r.unitGold}</td>
+                    <td className="num gold-val">{fmtGold(r.chestGold)}</td>
+                    <td className="num gold-dim" style={r.isWealth ? {color:"var(--wealth)"} : {}}>
+                      {r.isWealth ? `+${fmtGold(r.baseEff)} (×10)` : `+${fmtGold(baseGold)}`}
+                    </td>
+                    <td style={{textAlign:"center"}}>
+                      <button className={`wealth-btn ${r.isWealth ? "on" : ""}`}
+                              onClick={() => toggleWealth(r.col)}
+                              title="Toggle Wealth +1 (Abundant)">★</button>
+                    </td>
+                    <td className="num gold-val" style={r.isWealth ? {color:"var(--wealth)", fontWeight:700} : {fontWeight:700}}>
+                      {fmtGold(r.effective)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* RIGHT: journey summary + cube comparison */}
+        <div className="panel">
+          <div className="section" style={{marginTop:0}}>
+            <h3>Sands → Keys summary</h3>
+            <div className="summary-row">
+              <span className="label">1 Sand of Trial</span>
+              <span className="val gold-dim">{fmtGold(perSand)}</span>
+            </div>
+            <div className="summary-row">
+              <span className="label">1 Cube ticket (1720)</span>
+              <span className="val gold-dim">{fmtGold(perCubeTicket)}</span>
+            </div>
+            <div className="summary-row">
+              <span className="label">1 Blue Hell Key (1730) avg</span>
+              <span className="val gold-val">{fmtGold(perBHK)}</span>
+            </div>
+            <div className="summary-tot">
+              <span>4 sands → 1 BHK net</span>
+              <span className={`val ${chainNet >= 0 ? "delta-pos" : "delta-neg"}`}>
+                {chainNet >= 0 ? "+" : ""}{fmtGold(chainNet)}
+              </span>
+            </div>
+            <div className="notes" style={{marginTop:6, fontSize:".7rem"}}>
+              {chainNet >= 0
+                ? "Chain wins — convert sands rather than burning them in Haal's."
+                : "Haal's wins — feed sands directly into Haal's Hourglass instead of converting."}
+              {" "}See the <b>Sands → Keys??</b> tab for the full breakdown.
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </>
+  );
+}
+
+function SetupSidebar({ tab, tierIdx, setTierIdx, floorIdx, setFloorIdx,
+                       priceOverrides, setPriceOverrides,
+                       astroPrices, setAstroPrices, past25, setPast25,
+                       silverMode, setSilverMode,
+                       tier, tierIs1730, matDefaultPrice }) {
+  const showFloor = tab === "picker"; // Floor only relevant for the picker
+  return (
+    <div className="panel setup-sidebar">
+      <h2>Setup</h2>
+
+      <div className="ctrl">
+        <label>Hell Key</label>
+        <select value={tierIdx} onChange={e => setTierIdx(parseInt(e.target.value))}>
+          {D.key_tiers
+            .map((t, i) => ({t, i}))
+            .filter(({t}) => !t.is_old && !/Flame|Frost/i.test(t.label))
+            .map(({t, i}) => (
+              <option key={i} value={i}>{t.label}</option>
+            ))}
+        </select>
+      </div>
+
+      {showFloor && (
+        <div className="ctrl">
+          <label>Floor</label>
+          <select value={Math.min(floorIdx, tier.floors.length - 1)} onChange={e => setFloorIdx(parseInt(e.target.value))}>
+            {tier.floors.map((f, i) => <option key={i} value={i}>Floor {f.range}</option>)}
+          </select>
+        </div>
+      )}
+
+      <div className="section">
+        <details open>
+          <summary>Override unit prices</summary>
+          <div className="notes" style={{marginTop:8, fontSize:".72rem"}}>
+            These prices apply to every tab. Stones cover both "Stones" and "Base red stones" columns.
+          </div>
+          <div className="price-grid" style={{marginTop:8}}>
+            {PRICE_MATS.filter(m => m.group === "tier").map(({key, label, defaultPrice, cols, x100}) => {
+              // Hide mats that have specific tier columns but none are present in the
+              // current tier (e.g. some old tiers lack certain mats). Mats with empty
+              // cols (juices, T4 leapstones) are always shown — they apply globally.
+              if (tab === "picker" && cols.length > 0) {
+                const present = cols.some(c => tier.columns.includes(c));
+                if (!present) return null;
+              }
+              const tierDefault = matDefaultPrice(key);
+              const isPast25Disabled = past25 && tierIs1730 && key === "Red stones";
+              const internalCur = isPast25Disabled
+                ? 0
+                : (priceOverrides[key] !== undefined ? priceOverrides[key] : tierDefault);
+              // Stones are sold on the AH in bundles of 100, so display the bundle price
+              // and convert input → per-stone before storing.
+              const displayMult = x100 ? 100 : 1;
+              const cur = internalCur * displayMult;
+              const modified = priceOverrides[key] !== undefined && priceOverrides[key] !== tierDefault;
+              return (
+                <React.Fragment key={key}>
+                  <div className="label" style={{display:"flex", alignItems:"center", gap:6}}>
+                    <MatIcon matKey={key} size={18} tier45={tierIsT45(tier.label)} />
+                    <div>
+                      {label}{x100 && <span style={{fontSize:".66rem", color:"var(--text3)", fontWeight:400, marginLeft:4}}>(×100, AH bundle)</span>}
+                      {key === "Red stones" && tierIs1730 && (
+                        <label style={{display:"block", fontSize:".68rem", color:"var(--text3)", marginTop:2, fontWeight:400, cursor:"pointer"}}>
+                          <input type="checkbox" checked={past25} onChange={e => setPast25(e.target.checked)}
+                                 style={{verticalAlign:"middle", marginRight:4}} />
+                          +25 done (zero out)
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                  <input type="number" step={x100 ? 1 : 0.1} value={cur} disabled={isPast25Disabled}
+                         className={modified ? "modified" : ""}
+                         onChange={e => {
+                           const v = parseFloat(e.target.value) || 0;
+                           setPriceOverrides(p => ({...p, [key]: v / displayMult}));
+                         }} />
+                  {key === "Free taps" && (
+                    <>
+                      <div></div>
+                      <div style={{gridColumn:"1 / span 2", fontSize:".68rem", color:"var(--text3)", marginTop:-2, marginBottom:4, lineHeight:1.35}}>
+                        <a href="https://maxroll.gg/lost-ark/upgrade-calculator" target="_blank" rel="noopener" style={{color:"var(--accent)"}}>
+                          Calculate the value of your special hones here
+                        </a>
+                        {" "}— defaults to ~value for +19 weapon.
+                      </div>
+                    </>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+
+          {(Object.keys(priceOverrides).length > 0 || past25) && (
+            <button className="reset-btn" onClick={() => {
+              setPriceOverrides({});
+              setPast25(false);
+            }}>Reset prices</button>
+          )}
+        </details>
+      </div>
+
+      <div className="section">
+        <details>
+          <summary>Gems, astrogems & silver</summary>
+          <div className="notes" style={{marginTop:8, fontSize:".72rem"}}>
+            Lv 2 gem default 548.7g. Set the Lv 7 price to derive the Lv 2 price (Lv 7 = 243 × Lv 2 since each fuse takes 3 gems → 1).
+          </div>
+
+          <div className="price-grid" style={{marginTop:8}}>
+            {(() => {
+              const def = (PRICE_MATS.find(m => m.key === "Lv. 2 Gems") || {}).defaultPrice || 548.7;
+              const l2 = priceOverrides["Lv. 2 Gems"] !== undefined ? priceOverrides["Lv. 2 Gems"] : def;
+              const l7 = l2 * GEM_L7_RATIO;
+              const l2mod = priceOverrides["Lv. 2 Gems"] !== undefined && priceOverrides["Lv. 2 Gems"] !== def;
+              return (
+                <>
+                  <div className="label" style={{display:"flex", alignItems:"center", gap:6}}>
+                    <MatIcon matKey="Lv. 2 Gems" size={18} /> Lv. 2 gem
+                  </div>
+                  <input type="number" step="0.1" value={l2}
+                         className={l2mod ? "modified" : ""}
+                         onChange={e => setPriceOverrides(p => ({...p, "Lv. 2 Gems": parseFloat(e.target.value)||0}))} />
+                  <div className="label" style={{display:"flex", alignItems:"center", gap:6}}>
+                    <MatIcon matKey="Lv. 7 Gems" size={18} />
+                    <div>Lv. 7 gem<br/><span style={{fontSize:".68rem", color:"var(--text3)", fontWeight:400}}>÷ 243 → Lv. 2</span></div>
+                  </div>
+                  <input type="number" step="1" value={Math.round(l7)}
+                         className={l2mod ? "modified" : ""}
+                         onChange={e => {
+                           const v = parseFloat(e.target.value) || 0;
+                           setPriceOverrides(p => ({...p, "Lv. 2 Gems": v / GEM_L7_RATIO}));
+                         }} />
+                </>
+              );
+            })()}
+          </div>
+
+          <div style={{marginTop:14, paddingTop:10, borderTop:"1px solid var(--border)"}}>
+            <div style={{fontSize:".7rem", color:"var(--text2)", textTransform:"uppercase", letterSpacing:".4px", fontWeight:600, marginBottom:6}}>
+              Astrogem chests (by grade)
+            </div>
+            <div className="notes" style={{marginBottom:8, fontSize:".7rem"}}>
+              Random and Selectable chests are valued the same — only the grade matters.
+            </div>
+            <div className="price-grid">
+              {[
+                { k: "uncommon", label: "Min Uncommon (worthless)", iconKey: "Astrogem (uncommon)" },
+                { k: "rare",     label: "Rare-capable",              iconKey: "Astrogem (rare)" },
+                { k: "epic",     label: "Epic-only",                 iconKey: "Astrogem (epic)" },
+              ].map(({k, label, iconKey}) => {
+                const def = ASTRO_DEFAULTS[k];
+                const cur = astroPrices[k] !== undefined ? astroPrices[k] : def;
+                const modified = astroPrices[k] !== def;
+                return (
+                  <React.Fragment key={k}>
+                    <div className="label" style={{display:"flex", alignItems:"center", gap:6}}>
+                      <MatIcon matKey={iconKey} size={18} /> {label}
+                    </div>
+                    <input type="number" step="1" value={cur}
+                           className={modified ? "modified" : ""}
+                           onChange={e => setAstroPrices(p => ({...p, [k]: parseFloat(e.target.value)||0}))} />
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{marginTop:14, paddingTop:10, borderTop:"1px solid var(--border)"}}>
+            <div style={{fontSize:".7rem", color:"var(--text2)", textTransform:"uppercase", letterSpacing:".4px", fontWeight:600, marginBottom:6, display:"flex", alignItems:"center", gap:6}}>
+              <MatIcon matKey="Silver" size={16} /> Silver value
+            </div>
+            <div className="notes" style={{marginBottom:8, fontSize:".7rem"}}>
+              Choose how to value silver drops (cube/Haal mats).
+            </div>
+            {[
+              { mode: "worthless",   label: "Silver is worthless",                rate: "0 g / silver" },
+              { mode: "gem_reroll",  label: "1M silver per 1k gold",              rate: "0.001 g / silver", sub: "gem re-roll market rate" },
+              { mode: "gold_silver", label: "100k silver per 1k gold",            rate: "0.01 g / silver",  sub: "gold → silver merchant" },
+            ].map(opt => (
+              <label key={opt.mode}
+                     style={{display:"flex", alignItems:"flex-start", gap:8, padding:"6px 0", cursor:"pointer", fontSize:".82rem", borderBottom:"1px dashed var(--border)"}}>
+                <input type="checkbox"
+                       checked={silverMode === opt.mode}
+                       onChange={() => setSilverMode(opt.mode)}
+                       style={{marginTop:2, accentColor:"var(--accent)", cursor:"pointer"}} />
+                <span style={{flex:1}}>
+                  <div style={{color: silverMode === opt.mode ? "var(--accent)" : "var(--text)", fontWeight: silverMode === opt.mode ? 600 : 400}}>
+                    {opt.label}
+                  </div>
+                  <div style={{fontSize:".68rem", color:"var(--text3)"}}>
+                    {opt.rate}{opt.sub ? ` · ${opt.sub}` : ""}
+                  </div>
+                </span>
+              </label>
+            ))}
+          </div>
+
+          {(priceOverrides["Lv. 2 Gems"] !== undefined ||
+            astroPrices.uncommon !== ASTRO_DEFAULTS.uncommon ||
+            astroPrices.rare !== ASTRO_DEFAULTS.rare ||
+            astroPrices.epic !== ASTRO_DEFAULTS.epic ||
+            silverMode !== "worthless") && (
+            <button className="reset-btn" onClick={() => {
+              setPriceOverrides(p => {
+                const n = {...p};
+                delete n["Lv. 2 Gems"];
+                return n;
+              });
+              setAstroPrices(ASTRO_DEFAULTS);
+              setSilverMode("worthless");
+            }}>Reset gem prices</button>
+          )}
+        </details>
+      </div>
+
+      {tab === "picker" && (
+        <div className="section">
+          <h3>How to use</h3>
+          <div className="notes">
+            <div>The game offers 3 chests at the end of a run (4 with the Chest +1 altar) and you pick <b>one</b>. The chest table on the right ranks every possible offering by gold value so you can spot the best pick on sight.</div>
+            <div style={{marginTop:6}}>1. Pick your <b>Hell Key tier + floor</b> in the dropdowns above.</div>
+            <div>2. Tweak <b>unit prices</b> in the override panel to match your market — every gold figure on the page reacts live.</div>
+            <div>3. Toggle <b style={{color:"var(--wealth)"}}>★</b> on any chest the altar marks as <b style={{color:"var(--wealth)"}}>Abundant</b> — Wealth +1 only multiplies the <b>base rewards</b> (the SubDrop) by 10×, not the chest's main loot.</div>
+            <div>4. Hit the <b>Sands → Keys</b> tab to compare burning sands at Haal's vs converting them down the cube-ticket → Blue HK chain. The % next to the tab name shows the live chain gain/loss vs Haal's at your prices.</div>
+            <div>5. <b>Cubes</b> tab shows what each cube ticket pays out at your prices, with auto-detected T4 / T4.5 leapstone tier per cube.</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const [tab, setTab] = useState("picker");
+
+  // Default: 1730 Destiny Rewards (newest)
+  const defaultIdx = D.key_tiers.findIndex(t => t.label === "1730 Destiny Rewards");
+  const [tierIdx, setTierIdx] = useState(defaultIdx >= 0 ? defaultIdx : 0);
+  const [floorIdx, setFloorIdx] = useState(5); // 50-59 default (most-likely Rare-tier floor)
+  const [priceOverrides, setPriceOverrides] = useState({}); // keyed by logical mat key
+  const [astroPrices, setAstroPrices] = useState(ASTRO_DEFAULTS);
+  const [past25, setPast25] = useState(false);
+  const [silverMode, setSilverMode] = useState("worthless"); // "worthless" | "gem_reroll" | "gold_silver"
+
+  // Silver → gold conversion rates:
+  //   worthless     → 0 g/silver
+  //   gem_reroll    → 1m silver per 1k gold (workshop re-roll market) = 0.001 g/silver
+  //   gold_silver   → 100k silver per 1k gold (in-game gold→silver merchant) = 0.01 g/silver
+  const silverPrice = silverMode === "gem_reroll" ? 0.001
+                    : silverMode === "gold_silver" ? 0.01
+                    : 0;
+
+  const tier = D.key_tiers[tierIdx];
+  // Clamp floorIdx in case the user switched to a tier with fewer floors.
+  useEffect(() => {
+    if (floorIdx >= tier.floors.length) setFloorIdx(tier.floors.length - 1);
+  }, [tierIdx, tier.floors.length]);
+  const safeFloorIdx = Math.min(floorIdx, tier.floors.length - 1);
+  const floor = tier.floors[safeFloorIdx];
+  const baselineUnitGold = tier.unit_gold_value || {};
+  const tierIs1730 = tier.label.includes("1730");
+
+  // For a logical mat key, the default price = max of the underlying column
+  // prices for the given tier (or current picker tier if unspecified).
+  // Falls back to PRICE_MATS' defaultPrice if the columns aren't priced in that tier.
+  const matDefaultPrice = (key, tierLabel) => {
+    const def = PRICE_MATS.find(m => m.key === key);
+    if (!def) return 0;
+    let baseline = baselineUnitGold;
+    if (tierLabel) {
+      const t = D.key_tiers.find(x => x.label === tierLabel);
+      if (t) baseline = t.unit_gold_value || {};
+    }
+    let max = -Infinity;
+    for (const c of def.cols) {
+      const v = baseline[c];
+      if (typeof v === "number") max = Math.max(max, v);
+    }
+    return max === -Infinity ? def.defaultPrice : max;
+  };
+
+  // Each "Juice" tier-reward unit = 1 Lava's Breath (Red) + 3 Glacier's Breath (Blue),
+  // matching the 1:3 ratio seen in every Honing Support Chest in sekwahar's inferno
+  // data (Base = 6 Lava / 18 Glacier, Level 1 = 9 / 27, Level 2 = 12 / 36, etc.).
+  // With default prices that's 400 + 600 = 1000g, matching the spreadsheet's 1000g/unit.
+  const JUICE_BLUE_PER_UNIT = 3;
+  const JUICE_RED_PER_UNIT = 1;
+
+  // Effective unit price for a column. The optional second arg is the tier label
+  // the column belongs to — used to decide whether the +25 done toggle applies
+  // (zeros red stones for 1730 keys) and to pull the right baseline.
+  const effPrice = (col, tierLabel) => {
+    const key = matKey(col);
+    const is1730 = tierLabel ? tierLabel.includes("1730") : tierIs1730;
+    if (past25 && is1730 && key === "Red stones") return 0;
+    if (col === "Juice") {
+      const bluePrice = priceOverrides["Blue juice (T4.5)"] !== undefined
+        ? priceOverrides["Blue juice (T4.5)"]
+        : (PRICE_MATS.find(m => m.key === "Blue juice (T4.5)") || {}).defaultPrice || 200;
+      const redPrice = priceOverrides["Red juice (T4.5)"] !== undefined
+        ? priceOverrides["Red juice (T4.5)"]
+        : (PRICE_MATS.find(m => m.key === "Red juice (T4.5)") || {}).defaultPrice || 400;
+      return JUICE_BLUE_PER_UNIT * bluePrice + JUICE_RED_PER_UNIT * redPrice;
+    }
+    if (priceOverrides[key] !== undefined) return priceOverrides[key];
+    return matDefaultPrice(key, tierLabel);
+  };
+
+  // Per-floor "base rewards" (Base red stones / blue stones / leapstones / shards)
+  // are guaranteed payouts on top of whatever chest the player picks. Roll them
+  // into every chest's subtotal so the ranking is apples-to-apples.
+  const baseRewardGold = (floor, tierLabel) => {
+    const baseCols = ["Base red stones", "Base blue stones", "Base leapstones", "Base shards"];
+    let total = 0;
+    for (const col of baseCols) {
+      const v = floor.rewards[col];
+      if (typeof v !== "number") continue;
+      total += v * effPrice(col, tierLabel);
+    }
+    return total;
+  };
+
+  // Compute the Sands → Keys journey net (4 sands → 1 BHK vs 4 sands at Haal's)
+  // here so the tab label can flash a live % gain/loss next to "??".
+  const _matUnit = (key) => {
+    if (priceOverrides[key] !== undefined) return priceOverrides[key];
+    return (PRICE_MATS.find(m => m.key === key) || {}).defaultPrice || 0;
+  };
+  const _haal1730 = (D.cube_rewards || []).find(c => c.name === "Haal's Hourglass 1730") || {};
+  const _haalU = {
+    "Lv. 2 Gems": _matUnit("Lv. 2 Gems"),
+    "Leapstones": _matUnit("Leapstones"),
+    "Blue juice": _matUnit("Blue juice (T4.5)"),
+    "Red juice":  _matUnit("Red juice (T4.5)"),
+    "Silvers":    silverPrice,
+  };
+  const _matFields = ["Lv. 2 Gems", "Leapstones", "Blue juice", "Red juice", "Silvers"];
+  const journeyPerSand = _matFields.reduce((s, f) => s + (_haal1730[f] || 0) * (_haalU[f] || 0), 0);
+  const journeyBHK = useMemo(
+    () => getWeightedBestPickGold("1730 Destiny Rewards", "Rare", effPrice, astroPrices),
+    [priceOverrides, astroPrices, past25, silverPrice]
+  );
+  const journeyChainNet = journeyBHK - journeyPerSand * 4;
+  const journeyChainPct = journeyPerSand > 0 ? (journeyChainNet / (journeyPerSand * 4)) * 100 : 0;
+
+  const setupState = {
+    tab, tierIdx, setTierIdx, floorIdx, setFloorIdx,
+    priceOverrides, setPriceOverrides, astroPrices, setAstroPrices, past25, setPast25,
+    silverMode, setSilverMode, silverPrice,
+    tier, floor, baselineUnitGold, tierIs1730, matDefaultPrice, effPrice, baseRewardGold,
+  };
+
+  return (
+    <div>
+      <div className="tabs">
+        <button className={`tab-btn ${tab === "picker" ? "on" : ""}`} onClick={() => setTab("picker")}>Hell Reward Picker</button>
+        <button className={`tab-btn ${tab === "sand" ? "on" : ""}`} onClick={() => setTab("sand")}>
+          Sands → Keys
+          <span style={{marginLeft:6, fontSize:".78rem", fontWeight:700, color: journeyChainNet >= 0 ? "var(--green)" : "var(--red)"}}>
+            {journeyChainNet >= 0 ? "+" : ""}{journeyChainPct.toFixed(0)}%
+          </span>
+        </button>
+        <button className={`tab-btn ${tab === "cubes" ? "on" : ""}`} onClick={() => setTab("cubes")}>Cubes</button>
+      </div>
+      <div className="layout">
+        <SetupSidebar {...setupState} />
+        <div className="content-area">
+          {tab === "picker" && <PickerContent tier={tier} floor={floor} setupState={setupState} />}
+          {tab === "sand" && <SandFragmentTab setupState={setupState} />}
+          {tab === "cubes" && <CubesTab setupState={setupState} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
