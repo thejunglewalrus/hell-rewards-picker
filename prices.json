@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-07-02T06:00:03Z",
+  "regions": {
+    "nae": {
+      "source_valid_at": "2026-07-01T23:50:42+00:00",
+      "prices": {
+        "Red stones": 23.99,
+        "Blue stones": 1.26,
+        "Leapstones": 56.0,
+        "Fusions": 124.0,
+        "Red juice (T4.5)": 293.0,
+        "Blue juice (T4.5)": 293.0,
+        "Red stones (T4)": 4.7,
+        "Blue stones (T4)": 0.16,
+        "Leapstones (T4)": 15.0,
+        "Shards": 0.439,
+        "T4 Fusions": 99.0
+      }
+    },
+    "euc": {
+      "source_valid_at": "2026-07-01T23:45:17+00:00",
+      "prices": {
+        "Red stones": 22.88,
+        "Blue stones": 2.37,
+        "Leapstones": 28.0,
+        "Fusions": 165.0,
+        "Red juice (T4.5)": 219.0,
+        "Blue juice (T4.5)": 305.0,
+        "Red stones (T4)": 4.68,
+        "Blue stones (T4)": 0.22,
+        "Leapstones (T4)": 14.0,
+        "Shards": 0.219,
+        "T4 Fusions": 150.0
+      }
+    }
+  }
+}
